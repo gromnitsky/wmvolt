@@ -23,10 +23,10 @@
  *
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#define PACKAGE "wmapmload"
+#define VERSION "0.3.4"
 
+#include <unistd.h>
 #include <signal.h>
 #include "dockapp.h"
 #include "backlight_on.xpm"
