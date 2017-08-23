@@ -38,6 +38,8 @@
 #include <string.h>
 #include <signal.h>
 #include <sys/stat.h>
+#include <error.h>
+#include <argp.h>
 #include "dockapp.h"
 #include "backlight_on.xpm"
 #include "backlight_off.xpm"
@@ -72,26 +74,30 @@ static unsigned switch_authorized = True;
 static ApmInfos cur_apm_infos;
 
 typedef struct Conf {
+  // argp specific
+  char *arg1;
+  char **strings;
+
+  // user config
   char *display;
   Light backlight;		// back-light color
   char *light_color;
   int update_interval;		// sec
   int alarm_level;
-  bool is_windowed;
-  bool is_broken_wm;
   char *cmd_notify;
   char *cmd_suspend;
   char *cmd_hibernate;
 } Conf;
 
 Conf conf = {
+  .arg1 = NULL,
+  .strings = NULL,
+
   .display = "",
   .backlight = LIGHTOFF,
   .light_color = NULL,
   .update_interval = 5,
   .alarm_level = 20,
-  .is_windowed = false,
-  .is_broken_wm = true,
   .cmd_notify = NULL,
   .cmd_suspend = "echo systemctl suspend",
   .cmd_hibernate = "echo systemctl hibernate"
@@ -104,8 +110,7 @@ static void draw_timedigit(ApmInfos infos);
 static void draw_pcdigit(ApmInfos infos);
 static void draw_statusdigit(ApmInfos infos);
 static void draw_pcgraph(ApmInfos infos);
-static void parse_arguments(int argc, char **argv);
-static void print_help(char *prog);
+void cl_parse(int, char **);
 static void apm_getinfos(ApmInfos *infos);
 int apm_read(ApmInfos *i);
 
@@ -125,8 +130,7 @@ int main(int argc, char **argv) {
   sigemptyset(&sa.sa_mask);
   sigaction(SIGCHLD, &sa, NULL);
 
-  /* Parse CommandLine */
-  parse_arguments(argc, argv);
+  cl_parse(argc, argv);
 
   /* FIXME: Check for ACPI support */
 
@@ -357,90 +361,59 @@ static void draw_pcgraph(ApmInfos infos) {
     dockapp_copyarea(parts, pixmap, xd, 0, 2, 9, 6 + nb * 3, 33);
 }
 
+error_t
+parse_opt(int key, char *arg, struct argp_state *state) {
+  Conf *args = state->input;
 
-static void parse_arguments(int argc, char **argv) {
-  int i;
-  int integer;
-  for (i = 1; i < argc; i++) {
-    if (!strcmp(argv[i], "--help") || !strcmp(argv[i], "-h")) {
-      print_help(argv[0]), exit(0);
-    } else if (!strcmp(argv[i], "--version") || !strcmp(argv[i], "-v")) {
-      printf("%s version %s\n", PACKAGE, VERSION), exit(0);
-    } else if (!strcmp(argv[i], "--display") || !strcmp(argv[i], "-d")) {
-      conf.display = argv[i + 1];
-      i++;
-    } else if (!strcmp(argv[i], "--backlight") || !strcmp(argv[i], "-bl")) {
-      conf.backlight = LIGHTON;
-    } else if (!strcmp(argv[i], "--light-color") || !strcmp(argv[i], "-lc")) {
-      conf.light_color = argv[i + 1];
-      i++;
-    } else if (!strcmp(argv[i], "--interval") || !strcmp(argv[i], "-i")) {
-      if (argc == i + 1)
-	fprintf(stderr, "%s: error parsing argument for option %s\n",
-		argv[0], argv[i]), exit(1);
-      if (sscanf(argv[i + 1], "%i", &integer) != 1)
-	fprintf(stderr, "%s: error parsing argument for option %s\n",
-		argv[0], argv[i]), exit(1);
-      if (integer < 1)
-	fprintf(stderr, "%s: argument %s must be >=1\n",
-		argv[0], argv[i]), exit(1);
-      conf.update_interval = integer;
-      i++;
-    } else if (!strcmp(argv[i], "--alarm") || !strcmp(argv[i], "-a")) {
-      if (argc == i + 1)
-	fprintf(stderr, "%s: error parsing argument for option %s\n",
-		argv[0], argv[i]), exit(1);
-      if (sscanf(argv[i + 1], "%i", &integer) != 1)
-	fprintf(stderr, "%s: error parsing argument for option %s\n",
-		argv[0], argv[i]), exit(1);
-      if ( (integer < 0) || (integer > 100) )
-	fprintf(stderr, "%s: argument %s must be >=0 and <=100\n",
-		argv[0], argv[i]), exit(1);
-      conf.alarm_level = integer;
-      i++;
-    } else if (!strcmp(argv[i], "--windowed") || !strcmp(argv[i], "-w")) {
-      dockapp_iswindowed = True;
-    } else if (!strcmp(argv[i], "--broken-wm") || !strcmp(argv[i], "-bw")) {
-      dockapp_isbrokenwm = True;
-    } else if (!strcmp(argv[i], "--notify") || !strcmp(argv[i], "-n")) {
-      conf.cmd_notify = argv[i + 1];
-      i++;
-    } else if (!strcmp(argv[i], "--suspend") || !strcmp(argv[i], "-s")) {
-      conf.cmd_suspend = argv[i + 1];
-      i++;
-    } else if (!strcmp(argv[i], "--hibernate") || !strcmp(argv[i], "-H")) {
-      conf.cmd_hibernate = argv[i + 1];
-      i++;
-    } else {
-      fprintf(stderr, "%s: unrecognized option '%s'\n", argv[0], argv[i]);
-      print_help(argv[0]), exit(1);
-    }
+  switch (key) {
+  case 'd': args->display = arg; break;
+  case 'b': args->backlight = LIGHTON; break;
+  case 'l': args->light_color = arg; break;
+  case 'u':
+    args->update_interval = atoi(arg); /* FIXME: > 0 */
+    break;
+  case 'a':
+    args->alarm_level = atoi (arg); /* FIXME range: 1-99 */
+    break;
+  case 'w': dockapp_iswindowed = True; break;
+  case 'B': dockapp_isbrokenwm = True; break;
+  case 'n': args->cmd_notify = arg; break;
+  case 's': args->cmd_suspend = arg; break;
+  case 'H': args->cmd_hibernate = arg; break;
+  case 'h': argp_usage(state); break;
+  case ARGP_KEY_NO_ARGS: /* do nothing */ break;
+  case ARGP_KEY_ARG:
+    args->arg1 = arg;
+    args->strings = &state->argv[state->next];
+    state->next = state->argc;
+    break;
+  default:
+    return ARGP_ERR_UNKNOWN;
   }
+  return 0;
 }
 
+const char *argp_program_version = VERSION;
 
-static void print_help(char *prog)
-{
-  printf("Usage : %s [OPTIONS]\n"
-	 "%s - Window Maker mails monitor dockapp\n"
-	 "  -d,  --display <string>        display to use\n"
-	 "  -bl, --backlight               turn on back-light\n"
-	 "  -lc, --light-color <string>    back-light color(rgb:6E/C6/3B is default)\n"
-	 "  -i,  --interval <number>       number of secs between updates (1 is default)\n"
-	 "  -a,  --alarm <number>          low battery level when to raise alarm (20 is default)\n"
-	 "  -h,  --help                    show this help text and exit\n"
-	 "  -v,  --version                 show program version and exit\n"
-	 "  -w,  --windowed                run the application in windowed mode\n"
-	 "  -bw, --broken-wm               activate broken window manager fix\n"
-	 "  -n,  --notify <string>         command to launch when alarm is on\n"
-	 "  -s,  --suspend <string>        set command for suspend\n"
-	 "  -H,  --hibernate <string>        set command for hibernation\n",
-	 prog, prog);
-  /* OPTIONS SUPP :
-   *  ? -f, --file    : configuration file
-   */
+void
+cl_parse(int argc, char **argv) {
+  struct argp_option options[] = {
+    {"backlight",       'b', 0,      0, "Turn on the back-light" },
+    {"display",         'd', "str",  0, "X11 display to use" },
+    {"light-color",     'l', "#rgb", 0, "A back-light color" },
+    {"update-interval", 'u', "num",  0, "Seconds between the updates" },
+    {"alarm-level",     'a', "%",    0, "A low battery level that raises the alarm" },
+    {"windowed",        'w', 0,      0, "Run the app in the windowed mode" },
+    {"broken-wm",       'B', 0,      0, "Activate a broken WM fix" },
+    {"cmd-notify",      'n', "str",  0, "A command to launch when the alarm is on" },
+    {"cmd-suspend",     's', "str",  0, "A command to supend the machine" },
+    {"cmd-hibernate",   'H', "str",  0, "A command to hibernate the machine " },
+    //{"help",            'h', 0,      0,  "help" },
+    { 0 }
+  };
+  struct argp argp = { options, parse_opt, NULL, NULL };
+  argp_parse(&argp, argc, argv, 0, 0, &conf);
 }
-
 
 static void apm_getinfos(ApmInfos *infos) {
   if (!apm_read(infos)) {
