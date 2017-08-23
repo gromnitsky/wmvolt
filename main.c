@@ -29,7 +29,7 @@
 */
 
 #define PACKAGE "wmvolt"
-#define VERSION "1.0.0"
+const char *argp_program_version = "0.0.1";
 
 #define _XOPEN_SOURCE
 
@@ -74,25 +74,17 @@ static unsigned switch_authorized = True;
 static ApmInfos cur_apm_infos;
 
 typedef struct Conf {
-  // argp specific
-  char *arg1;
-  char **strings;
-
-  // user config
   char *display;
-  Light backlight;		// back-light color
-  char *light_color;
+  Light backlight;		// color
+  char *light_color;		// #rgb
   int update_interval;		// sec
-  int alarm_level;
+  int alarm_level;		// %
   char *cmd_notify;
   char *cmd_suspend;
   char *cmd_hibernate;
 } Conf;
 
 Conf conf = {
-  .arg1 = NULL,
-  .strings = NULL,
-
   .display = "",
   .backlight = LIGHTOFF,
   .light_color = NULL,
@@ -380,20 +372,11 @@ parse_opt(int key, char *arg, struct argp_state *state) {
   case 'n': args->cmd_notify = arg; break;
   case 's': args->cmd_suspend = arg; break;
   case 'H': args->cmd_hibernate = arg; break;
-  case 'h': argp_usage(state); break;
-  case ARGP_KEY_NO_ARGS: /* do nothing */ break;
-  case ARGP_KEY_ARG:
-    args->arg1 = arg;
-    args->strings = &state->argv[state->next];
-    state->next = state->argc;
-    break;
   default:
     return ARGP_ERR_UNKNOWN;
   }
   return 0;
 }
-
-const char *argp_program_version = VERSION;
 
 void
 cl_parse(int argc, char **argv) {
@@ -408,7 +391,6 @@ cl_parse(int argc, char **argv) {
     {"cmd-notify",      'n', "str",  0, "A command to launch when the alarm is on" },
     {"cmd-suspend",     's', "str",  0, "A command to supend the machine" },
     {"cmd-hibernate",   'H', "str",  0, "A command to hibernate the machine " },
-    //{"help",            'h', 0,      0,  "help" },
     { 0 }
   };
   struct argp argp = { options, parse_opt, NULL, NULL };
