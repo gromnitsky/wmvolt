@@ -15,8 +15,9 @@ compile:
 out := _build.$(build.target)$(DEBUG)
 
 obj := $(patsubst %.c, $(out)/%.o, $(wildcard *.c))
-$(obj): $(wildcard *.h)
-$(out)/main.o: $(wildcard *.xpm)
+$(out)/main.o: $(wildcard *.xpm) $(wildcard *.h)
+$(out)/battery.o: battery.h
+$(out)/dockapp.o: dockapp.h
 
 $(out)/%.o: %.c
 	@mkdir -p $(dir $@)

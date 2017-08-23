@@ -23,6 +23,7 @@
  * modified by Seiichi SATO <ssato@sh.rim.or.jp>
  */
 
+#include <stdlib.h>
 #include "dockapp.h"
 
 #define WINDOWED_SIZE_W 64
