@@ -24,6 +24,7 @@
  */
 
 #include <stdlib.h>
+#include <sys/select.h>
 #include "dockapp.h"
 
 #define WINDOWED_SIZE_W 64

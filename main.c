@@ -31,6 +31,8 @@
 #define PACKAGE "wmvolt"
 #define VERSION "1.0.0"
 
+#define _XOPEN_SOURCE
+
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>

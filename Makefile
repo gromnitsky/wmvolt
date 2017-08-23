@@ -3,7 +3,7 @@ override DEBUG := -debug
 override CFLAGS += -g
 endif
 
-CFLAGS += -Wall
+CFLAGS += -std=c11 -Wall
 override LDFLAGS += `pkg-config --libs xpm xext`
 
 ifndef build.target
