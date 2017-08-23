@@ -33,25 +33,7 @@
 #include "backlight_off.xpm"
 #include "parts.xpm"
 
-#ifdef linux
 #include <sys/stat.h>
-#endif
-
-/*#ifdef SunOS*/
-#ifdef solaris
-#include <unistd.h>
-#include <fcntl.h>
-#include <stropts.h>
-#include <sys/battery.h>
-#endif
-
-
-#ifdef freebsd
-#include <err.h>
-#include <sys/file.h>
-#include <sys/ioctl.h>
-#include <machine/apm_bios.h>
-#endif
 
 #define FREE(data) {if (data) free (data); data = NULL;}
 
@@ -61,13 +43,7 @@
 #define MAX_HISTORY 16
 #define CPUNUM_NONE -1
 
-#ifdef freebsd
-# define APMDEV "/dev/apm"
-#else
-# ifdef linux
-#  define APMDEV "/proc/apm"
-# endif
-#endif
+#define APMDEV "/proc/apm"
 
 #define SUSPEND_CMD "apm -s"
 #define STANDBY_CMD "apm -S"
@@ -105,10 +81,8 @@ static char     *standby_cmd      = NULL;
 
 static ApmInfos cur_apm_infos;
 
-#ifdef linux
-# ifndef APM_32_BIT_SUPPORT
-#  define APM_32_BIT_SUPPORT      0x0002
-# endif
+#ifndef APM_32_BIT_SUPPORT
+# define APM_32_BIT_SUPPORT      0x0002
 #endif
 
 
@@ -124,13 +98,7 @@ static void print_help(char *prog);
 static void apm_getinfos(ApmInfos *infos);
 static int  apm_exists();
 static int  my_system (char *cmd);
-#ifdef linux
 int apm_read(ApmInfos *i);
-#else
-# ifdef freebsd
-int apm_read(apm_info_t temp_info);
-# endif
-#endif
 
 
 int main(int argc, char **argv) {
@@ -153,11 +121,7 @@ int main(int argc, char **argv) {
 
     /* Check for APM support */
     if (!apm_exists()) {
-#ifdef linux
         fprintf(stderr, "No APM support in kernel\n");
-#else
-        fprintf(stderr, "Unable to access APM info\n");
-#endif
         exit(1);
     }
 
@@ -197,7 +161,7 @@ int main(int argc, char **argv) {
     pixmap = dockapp_XCreatePixmap(SIZE, SIZE);
 
     /* Initialize pixmap */
-    if (backlight == LIGHTON) 
+    if (backlight == LIGHTON)
         dockapp_copyarea(backdrop_on, pixmap, 0, 0, SIZE, SIZE, 0, 0);
     else
         dockapp_copyarea(backdrop_off, pixmap, 0, 0, SIZE, SIZE, 0, 0);
@@ -268,9 +232,9 @@ static void update() {
     }
 
     /* all clear */
-    if (backlight == LIGHTON) 
+    if (backlight == LIGHTON)
         dockapp_copyarea(backdrop_on, pixmap, 0, 0, 58, 58, 0, 0);
-    else 
+    else
         dockapp_copyarea(backdrop_off, pixmap, 0, 0, 58, 58, 0, 0);
 
     /* draw digit */
@@ -317,20 +281,12 @@ static void draw_timedigit(ApmInfos infos) {
 
     /*
     if (
-#ifdef Linux
     (infos.battery_time >= ((infos.using_minutes) ? 1440 : 86400))
-#else
-# ifdef FreeBSD
-    (infos.battery_time >= 86400)
-# endif
-#endif
         ) {
         copyXPMArea(83, 106, 41, 9, 15, 7);
     } else if (infos.battery_time >= 0) {
     */
-#if defined(linux) || defined(freebsd)
     time_left = (infos.using_minutes) ? infos.battery_time : infos.battery_time / 60;
-#endif
     hour_left = time_left / 60;
     min_left  = time_left % 60;
     dockapp_copyarea(parts, pixmap, (hour_left / 10) * 10, y, 10, 20,  5, 7);
@@ -487,35 +443,10 @@ static void print_help(char *prog)
 
 
 static void apm_getinfos(ApmInfos *infos) {
-#ifdef freebsd
-    struct apm_info temp_info;
-#endif
-
-    if (
-#if defined(linux) || defined(solaris)
-    (apm_read(infos))
-#else
-# ifdef freebsd
-    (apm_read(&temp_info))
-# endif
-#endif
-     ) {
+    if (apm_read(infos)) {
         fprintf(stderr, "Cannot read APM information\n");
         exit(1);
     }
-            
-            
-#ifdef freebsd     /* Convert status's */
-    infos->ac_line_status     = (int)temp_info.ai_acline;
-    infos->battery_status     = (int)temp_info.ai_batt_stat;
-    /*infos->battery_percentage = (int)temp_info.ai_batt_life;*/
-    /* on errors 255 is returned */
-    if (255 == temp_info.ai_batt_life)
-        infos->battery_percentage = -1;
-    else
-        infos->battery_percentage = (int)temp_info.ai_batt_life;
-    infos->battery_time       = (int)temp_info.ai_batt_time;
-#endif
 }
 
 
@@ -551,7 +482,6 @@ static int my_system (char *cmd) {
 }
 
 
-#ifdef linux
 int apm_read(ApmInfos *i) {
     FILE        *str;
     char         units[10];
@@ -626,72 +556,3 @@ int apm_read(ApmInfos *i) {
 
     return retcode;
 }
-#else
-# ifdef freebsd
-int apm_read(apm_info_t temp_info) {
-    int fd;
-    if ( (fd = open(APMDEV, O_RDWR)) < 0) {
-        return 1;
-    } else if (ioctl(fd, APMIO_GETINFO, temp_info) == -1) {
-        close(fd);
-        return 1;
-    } else {
-        close(fd);
-        return 0;
-    }
-}
-# endif
-#endif
-#ifdef solaris
-int apm_read(ApmInfos *i) {
-    int fd;
-    battery_t info;
-
-    memset(i,0,sizeof(*i));
-    if ((fd = open(APMDEV,O_RDONLY)) < 0) {
-        perror("open");
-        exit(1);
-    }
-    if (ioctl(fd,BATT_STATUS,&info) < 0) return 1;
-    close(fd);
-
-    i->battery_percentage = info.capacity;
-    i->battery_time = info.discharge_time;
-    i->using_minutes = 0;
-
-    switch(info.status) {
-        case EMPTY:                         /* Battery has (effectively) no capacity */
-            i->battery_status = 2;
-            break;
-        case LOW_CAPACITY:                  /* Battery has less than 25% capacity */
-            i->battery_status = 1;
-            break;
-        case MED_CAPACITY:                  /* Battery has less than 50% capacity */
-            i->battery_status = 1;
-            break;
-        case HIGH_CAPACITY:                 /* Battery has less than 75% capacity */
-        case FULL_CAPACITY:                 /* Battery has more than 75% capacity */
-            i->battery_status = 0;
-            break;
-        default:
-            i->battery_status = 2;
-            break;
-    }
-
-    switch(info.charge) {
-        case DISCHARGE:                             /* Battery is discharging (i.e. in use) */
-            i->ac_line_status = 0;
-            break;
-        case FULL_CHARGE:                   /* Battery is charging at its fastest rate */
-        case TRICKLE_CHARGE:                /* Battery is charging at a slower rate */
-        default:
-            i->ac_line_status = 1;
-            break;
-    }
-
-    if (i->battery_percentage > 100) i->battery_percentage = 100;
-
-    return 0;
-}
-#endif
-
