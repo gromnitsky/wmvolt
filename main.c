@@ -38,7 +38,7 @@ const char *argp_program_version = "0.0.1";
 #include <string.h>
 #include <signal.h>
 #include <sys/stat.h>
-#include <error.h>
+#include <err.h>
 #include <argp.h>
 #include "dockapp.h"
 #include "backlight_on.xpm"
@@ -82,6 +82,7 @@ typedef struct Conf {
   char *cmd_notify;
   char *cmd_suspend;
   char *cmd_hibernate;
+  int battery;
 } Conf;
 
 Conf conf = {
@@ -92,7 +93,8 @@ Conf conf = {
   .alarm_level = 20,
   .cmd_notify = NULL,
   .cmd_suspend = "echo systemctl suspend",
-  .cmd_hibernate = "echo systemctl hibernate"
+  .cmd_hibernate = "echo systemctl hibernate",
+  .battery = -1
 };
 
 /* prototypes */
@@ -356,6 +358,7 @@ static void draw_pcgraph(ApmInfos infos) {
 error_t
 parse_opt(int key, char *arg, struct argp_state *state) {
   Conf *args = state->input;
+  int *bt_list;
 
   switch (key) {
   case 'd': args->display = arg; break;
@@ -368,10 +371,20 @@ parse_opt(int key, char *arg, struct argp_state *state) {
     args->alarm_level = atoi (arg); /* FIXME range: 1-99 */
     break;
   case 'w': dockapp_iswindowed = True; break;
-  case 'B': dockapp_isbrokenwm = True; break;
+  case 'W': dockapp_isbrokenwm = True; break;
   case 'n': args->cmd_notify = arg; break;
-  case 's': args->cmd_suspend = arg; break;
+  case 'S': args->cmd_suspend = arg; break;
   case 'H': args->cmd_hibernate = arg; break;
+  case 'p':
+    bt_list = battery_list();
+    if (bt_list) {
+      while (*bt_list != -1) printf("%d ", *bt_list++);
+      printf("\n");
+      exit(0);
+    }
+    errx(1, "no batteries detected");
+    break;
+  case 'B': args->battery = atoi(arg); break;
   default:
     return ARGP_ERR_UNKNOWN;
   }
@@ -387,10 +400,12 @@ cl_parse(int argc, char **argv) {
     {"update-interval", 'u', "num",  0, "Seconds between the updates" },
     {"alarm-level",     'a', "%",    0, "A low battery level that raises the alarm" },
     {"windowed",        'w', 0,      0, "Run the app in the windowed mode" },
-    {"broken-wm",       'B', 0,      0, "Activate a broken WM fix" },
+    {"broken-wm",       'W', 0,      0, "Activate the broken WM fix" },
     {"cmd-notify",      'n', "str",  0, "A command to launch when the alarm is on" },
-    {"cmd-suspend",     's', "str",  0, "A command to supend the machine" },
+    {"cmd-suspend",     'S', "str",  0, "A command to supend the machine" },
     {"cmd-hibernate",   'H', "str",  0, "A command to hibernate the machine " },
+    {"print-batteries", 'p', 0,      0, "Print all the available batteries" },
+    {"battery",         'B', "num",  0, "Explicitly select the battery" },
     { 0 }
   };
   struct argp argp = { options, parse_opt, NULL, NULL };
