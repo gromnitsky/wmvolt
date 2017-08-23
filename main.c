@@ -261,9 +261,8 @@ static void draw_timedigit(Battery infos) {
 
   if (conf.backlight == LIGHTON) y = 20;
 
-  time_left = infos.seconds_remaining;
-  hour_left = time_left / 60;
-  min_left  = time_left % 60;
+  hour_left = infos.seconds_remaining / 3600;
+  min_left = infos.seconds_remaining / 60 % 60;
   dockapp_copyarea(parts, pixmap, (hour_left / 10) * 10, y, 10, 20,  5, 7);
   dockapp_copyarea(parts, pixmap, (hour_left % 10) * 10, y, 10, 20, 17, 7);
   dockapp_copyarea(parts, pixmap, (min_left / 10)  * 10, y, 10, 20, 32, 7);
@@ -302,7 +301,7 @@ static void draw_statusdigit(Battery infos) {
     xd = 50;
   }
 
-  if (!infos.is_charging)
+  if (infos.is_charging)
     dockapp_copyarea(parts, pixmap, 100, y, 4, 9, 41, 45);
 
   if (infos.is_ac_power)
