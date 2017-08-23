@@ -105,8 +105,8 @@ static void draw_pcdigit(ApmInfos infos);
 static void draw_statusdigit(ApmInfos infos);
 static void draw_pcgraph(ApmInfos infos);
 void cl_parse(int, char **);
-static void apm_getinfos(ApmInfos *infos);
-int apm_read(ApmInfos *i);
+void battery_set_current();
+void bt_update();
 
 
 int main(int argc, char **argv) {
@@ -129,7 +129,8 @@ int main(int argc, char **argv) {
   /* FIXME: Check for ACPI support */
 
   /* Initialize Application */
-  apm_getinfos(&cur_apm_infos);
+  battery_set_current();
+  bt_update();
   dockapp_open_window(conf.display, PACKAGE, SIZE, SIZE, argc, argv);
   dockapp_set_eventmask(ButtonPressMask);
 
@@ -204,8 +205,7 @@ static void update() {
   static Light pre_backlight;
   static Bool in_alarm_mode = False;
 
-  /* get current cpu usage in percent */
-  apm_getinfos(&cur_apm_infos);
+  bt_update();
 
   /* alarm mode */
   if (cur_apm_infos.battery_percentage < conf.alarm_level) {
@@ -260,7 +260,7 @@ static void switch_light() {
   }
 
   /* redraw digit */
-  apm_getinfos(&cur_apm_infos);
+  bt_update();
   draw_timedigit(cur_apm_infos);
   draw_pcdigit(cur_apm_infos);
   draw_statusdigit(cur_apm_infos);
@@ -412,28 +412,25 @@ cl_parse(int argc, char **argv) {
   argp_parse(&argp, argc, argv, 0, 0, &conf);
 }
 
-static void apm_getinfos(ApmInfos *infos) {
-  if (!apm_read(infos)) {
-    fprintf(stderr, "Cannot read APM information\n");
-    exit(1);
-  }
-}
-
-
-int apm_read(ApmInfos *i) {
-  fprintf(stderr, "apm_read()\n");
-
-  int *bt_list = battery_list();
-  if (!bt_list) return false;
+void bt_update() {
+  fprintf(stderr, "bt_update()\n");
 
   Battery bt;
-  battery_get(1, &bt);
+  if (!battery_get(conf.battery, &bt))
+    errx(1, "failed to get data for battery #%d", conf.battery);
 
-  i->ac_line_status = bt.is_ac_power;
-  i->battery_status = bt.is_charging;
-  i->battery_percentage = bt.capacity;
-  i->battery_time = bt.seconds_remaining;
+  cur_apm_infos.ac_line_status = bt.is_ac_power;
+  cur_apm_infos.battery_status = bt.is_charging;
+  cur_apm_infos.battery_percentage = bt.capacity;
+  cur_apm_infos.battery_time = bt.seconds_remaining;
 
-  i->using_minutes = 0;
-  return true;
+  cur_apm_infos.using_minutes = 0;
+}
+
+void battery_set_current() {
+  if (conf.battery != -1) return;
+
+  int *bt_list = battery_list();
+  if (!bt_list) errx(1, "no batteries detected");
+  conf.battery = bt_list[0];
 }
