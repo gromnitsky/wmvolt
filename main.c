@@ -37,15 +37,8 @@
 #include "parts.xpm"
 #include "battery.h"
 
-#define FREE(data) {if (data) free (data); data = NULL;}
-
 #define SIZE	    58
-#define MAXSTRLEN   512
 #define WINDOWED_BG ". c #AEAAAE"
-#define MAX_HISTORY 16
-#define CPUNUM_NONE -1
-
-#define APMDEV "/proc/apm"
 
 #define SUSPEND_CMD "apm -s"
 #define STANDBY_CMD "apm -S"
@@ -83,10 +76,6 @@ static char     *standby_cmd      = NULL;
 
 static ApmInfos cur_apm_infos;
 
-#ifndef APM_32_BIT_SUPPORT
-# define APM_32_BIT_SUPPORT      0x0002
-#endif
-
 
 /* prototypes */
 static void update();
@@ -98,7 +87,6 @@ static void draw_pcgraph(ApmInfos infos);
 static void parse_arguments(int argc, char **argv);
 static void print_help(char *prog);
 static void apm_getinfos(ApmInfos *infos);
-static int  my_system (char *cmd);
 int apm_read(ApmInfos *i);
 
 
@@ -175,12 +163,10 @@ int main(int argc, char **argv) {
                     switch (event.xbutton.button) {
                         case 1: switch_light(); break;
                         case 2:
-#ifndef SunOS
                             if (event.xbutton.state == ControlMask)
-                                my_system(suspend_cmd ? suspend_cmd : SUSPEND_CMD); /* Suspend */
+                                system(suspend_cmd ? suspend_cmd : SUSPEND_CMD); /* Suspend */
                             else
-                                my_system(standby_cmd ? standby_cmd : STANDBY_CMD); /* Standby */
-#endif
+                                system(standby_cmd ? standby_cmd : STANDBY_CMD); /* Standby */
                             break;
                         case 3: switch_authorized = !switch_authorized; break;
                         default: break;
@@ -211,7 +197,7 @@ static void update() {
         if (!in_alarm_mode) {
             in_alarm_mode = True;
             pre_backlight = backlight;
-            my_system(notif_cmd);
+            system(notif_cmd);
         }
         if ( (switch_authorized) ||
              ( (! switch_authorized) && (backlight != pre_backlight) ) ) {
@@ -444,29 +430,6 @@ static void apm_getinfos(ApmInfos *infos) {
         fprintf(stderr, "Cannot read APM information\n");
         exit(1);
     }
-}
-
-static int my_system (char *cmd) {
-    int           pid;
-    extern char **environ;
-
-    if (cmd == 0) return 1;
-    pid = fork ();
-    if (pid == -1) return -1;
-    if (pid == 0) {
-        pid = fork ();
-        if (pid == 0) {
-            char *argv[4];
-            argv[0] = "sh";
-            argv[1] = "-c";
-            argv[2] = cmd;
-            argv[3] = 0;
-            execve ("/bin/sh", argv, environ);
-            exit (0);
-        }
-        exit (0);
-    }
-    return 0;
 }
 
 
