@@ -15,6 +15,8 @@ void battery_init(Battery*);
 
 // return false on error
 bool battery_get(int, Battery*);
+// return false on error
+bool battery_get_from_file(char*, Battery*);
 // return a -1-terminated array or NULL on error;
 // the result should be free()'ed
 int *battery_list();
