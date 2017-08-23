@@ -257,7 +257,7 @@ static void switch_light() {
 
 static void draw_timedigit(Battery infos) {
   int y = 0;
-  int time_left, hour_left, min_left;
+  int hour_left, min_left;
 
   if (conf.backlight == LIGHTON) y = 20;
 
@@ -398,7 +398,7 @@ void bt_update() {
   printf("charging = %d\n", bt.is_charging);
   printf("cap = %d\n", bt.capacity);
   printf("sec rem = %d\n", bt.seconds_remaining);
-  printf("\n", bt.seconds_remaining);
+  printf("\n");
 }
 
 void battery_set_current() {
