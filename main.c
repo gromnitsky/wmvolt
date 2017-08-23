@@ -47,9 +47,6 @@
 #define SIZE	    58
 #define WINDOWED_BG ". c #AEAAAE"
 
-#define SUSPEND_CMD "apm -s"
-#define STANDBY_CMD "apm -S"
-
 typedef struct ApmInfos {
   const char driver_version[10];
   int        apm_version_major;
@@ -63,7 +60,7 @@ typedef struct ApmInfos {
   int        using_minutes;
 } ApmInfos;
 
-typedef enum { LIGHTOFF, LIGHTON } light;
+typedef enum { LIGHTOFF, LIGHTON } Light;
 
 
 Pixmap pixmap;
@@ -71,18 +68,34 @@ Pixmap backdrop_on;
 Pixmap backdrop_off;
 Pixmap parts;
 Pixmap mask;
-static char	*display_name     = "";
-static char	*light_color      = NULL;	/* back-light color */
-static unsigned update_interval   = 1;
-static light    backlight         = LIGHTOFF;
 static unsigned switch_authorized = True;
-static unsigned alarm_level       = 20;
-static char     *notif_cmd        = NULL;
-static char     *suspend_cmd      = NULL;
-static char     *standby_cmd      = NULL;
-
 static ApmInfos cur_apm_infos;
 
+typedef struct Conf {
+  char *display;
+  Light backlight;		// back-light color
+  char *light_color;
+  int update_interval;		// sec
+  int alarm_level;
+  bool is_windowed;
+  bool is_broken_wm;
+  char *cmd_notify;
+  char *cmd_suspend;
+  char *cmd_hibernate;
+} Conf;
+
+Conf conf = {
+  .display = "",
+  .backlight = LIGHTOFF,
+  .light_color = NULL,
+  .update_interval = 5,
+  .alarm_level = 20,
+  .is_windowed = false,
+  .is_broken_wm = true,
+  .cmd_notify = NULL,
+  .cmd_suspend = "echo systemctl suspend",
+  .cmd_hibernate = "echo systemctl hibernate"
+};
 
 /* prototypes */
 static void update();
@@ -119,12 +132,12 @@ int main(int argc, char **argv) {
 
   /* Initialize Application */
   apm_getinfos(&cur_apm_infos);
-  dockapp_open_window(display_name, PACKAGE, SIZE, SIZE, argc, argv);
+  dockapp_open_window(conf.display, PACKAGE, SIZE, SIZE, argc, argv);
   dockapp_set_eventmask(ButtonPressMask);
 
-  if (light_color) {
-    colors[0].pixel = dockapp_getcolor(light_color);
-    colors[1].pixel = dockapp_blendedcolor(light_color, -24, -24, -24, 1.0);
+  if (conf.light_color) {
+    colors[0].pixel = dockapp_getcolor(conf.light_color);
+    colors[1].pixel = dockapp_blendedcolor(conf.light_color, -24, -24, -24, 1.0);
     ncolor = 2;
   }
 
@@ -153,7 +166,7 @@ int main(int argc, char **argv) {
   pixmap = dockapp_XCreatePixmap(SIZE, SIZE);
 
   /* Initialize pixmap */
-  if (backlight == LIGHTON)
+  if (conf.backlight == LIGHTON)
     dockapp_copyarea(backdrop_on, pixmap, 0, 0, SIZE, SIZE, 0, 0);
   else
     dockapp_copyarea(backdrop_off, pixmap, 0, 0, SIZE, SIZE, 0, 0);
@@ -163,17 +176,14 @@ int main(int argc, char **argv) {
 
   /* Main loop */
   while (1) {
-    if (dockapp_nextevent_or_timeout(&event, update_interval * 1000)) {
+    if (dockapp_nextevent_or_timeout(&event, conf.update_interval * 1000)) {
       /* Next Event */
       switch (event.type) {
       case ButtonPress:
 	switch (event.xbutton.button) {
 	case 1: switch_light(); break;
 	case 2:
-	  if (event.xbutton.state == ControlMask)
-	    system(suspend_cmd ? suspend_cmd : SUSPEND_CMD); /* Suspend */
-	  else
-	    system(standby_cmd ? standby_cmd : STANDBY_CMD); /* Standby */
+	  system(event.xbutton.state == ControlMask ? conf.cmd_hibernate: conf.cmd_suspend);
 	  break;
 	case 3: switch_authorized = !switch_authorized; break;
 	default: break;
@@ -193,28 +203,28 @@ int main(int argc, char **argv) {
 
 /* called by timer */
 static void update() {
-  static light pre_backlight;
+  static Light pre_backlight;
   static Bool in_alarm_mode = False;
 
   /* get current cpu usage in percent */
   apm_getinfos(&cur_apm_infos);
 
   /* alarm mode */
-  if (cur_apm_infos.battery_percentage < alarm_level) {
+  if (cur_apm_infos.battery_percentage < conf.alarm_level) {
     if (!in_alarm_mode) {
       in_alarm_mode = True;
-      pre_backlight = backlight;
-      system(notif_cmd);
+      pre_backlight = conf.backlight;
+      system(conf.cmd_notify);
     }
     if ( (switch_authorized) ||
-	 ( (! switch_authorized) && (backlight != pre_backlight) ) ) {
+	 ( (! switch_authorized) && (conf.backlight != pre_backlight) ) ) {
       switch_light();
       return;
     }
   } else {
     if (in_alarm_mode) {
       in_alarm_mode = False;
-      if (backlight != pre_backlight) {
+      if (conf.backlight != pre_backlight) {
 	switch_light();
 	return;
       }
@@ -222,7 +232,7 @@ static void update() {
   }
 
   /* all clear */
-  if (backlight == LIGHTON)
+  if (conf.backlight == LIGHTON)
     dockapp_copyarea(backdrop_on, pixmap, 0, 0, 58, 58, 0, 0);
   else
     dockapp_copyarea(backdrop_off, pixmap, 0, 0, 58, 58, 0, 0);
@@ -240,13 +250,13 @@ static void update() {
 
 /* called when mouse button pressed */
 static void switch_light() {
-  switch (backlight) {
+  switch (conf.backlight) {
   case LIGHTOFF:
-    backlight = LIGHTON;
+    conf.backlight = LIGHTON;
     dockapp_copyarea(backdrop_on, pixmap, 0, 0, 58, 58, 0, 0);
     break;
   case LIGHTON:
-    backlight = LIGHTOFF;
+    conf.backlight = LIGHTOFF;
     dockapp_copyarea(backdrop_off, pixmap, 0, 0, 58, 58, 0, 0);
     break;
   }
@@ -267,7 +277,7 @@ static void draw_timedigit(ApmInfos infos) {
   int y = 0;
   int time_left, hour_left, min_left;
 
-  if (backlight == LIGHTON) y = 20;
+  if (conf.backlight == LIGHTON) y = 20;
 
   /*
     if (
@@ -300,7 +310,7 @@ static void draw_pcdigit(ApmInfos infos) {
   v10  = (num - v100 * 100) / 10;
   v1   = (num - v100 * 100 - v10 * 10);
 
-  if (backlight == LIGHTON) xd = 50;
+  if (conf.backlight == LIGHTON) xd = 50;
 
   /* draw digit */
   dockapp_copyarea(parts, pixmap, v1 * 5 + xd, 40, 5, 9, 17, 45);
@@ -317,7 +327,7 @@ static void draw_statusdigit(ApmInfos infos) {
   int xd = 0;
   int y = 31;
 
-  if (backlight == LIGHTON) {
+  if (conf.backlight == LIGHTON) {
     y = 40;
     xd = 50;
   }
@@ -340,7 +350,7 @@ static void draw_pcgraph(ApmInfos infos) {
 
   if (num < 0) num = 0;
 
-  if (backlight == LIGHTON) xd = 102;
+  if (conf.backlight == LIGHTON) xd = 102;
 
   /* draw digit */
   for (nb = 0 ; nb < num ; nb++)
@@ -357,12 +367,12 @@ static void parse_arguments(int argc, char **argv) {
     } else if (!strcmp(argv[i], "--version") || !strcmp(argv[i], "-v")) {
       printf("%s version %s\n", PACKAGE, VERSION), exit(0);
     } else if (!strcmp(argv[i], "--display") || !strcmp(argv[i], "-d")) {
-      display_name = argv[i + 1];
+      conf.display = argv[i + 1];
       i++;
     } else if (!strcmp(argv[i], "--backlight") || !strcmp(argv[i], "-bl")) {
-      backlight = LIGHTON;
+      conf.backlight = LIGHTON;
     } else if (!strcmp(argv[i], "--light-color") || !strcmp(argv[i], "-lc")) {
-      light_color = argv[i + 1];
+      conf.light_color = argv[i + 1];
       i++;
     } else if (!strcmp(argv[i], "--interval") || !strcmp(argv[i], "-i")) {
       if (argc == i + 1)
@@ -374,7 +384,7 @@ static void parse_arguments(int argc, char **argv) {
       if (integer < 1)
 	fprintf(stderr, "%s: argument %s must be >=1\n",
 		argv[0], argv[i]), exit(1);
-      update_interval = integer;
+      conf.update_interval = integer;
       i++;
     } else if (!strcmp(argv[i], "--alarm") || !strcmp(argv[i], "-a")) {
       if (argc == i + 1)
@@ -386,20 +396,20 @@ static void parse_arguments(int argc, char **argv) {
       if ( (integer < 0) || (integer > 100) )
 	fprintf(stderr, "%s: argument %s must be >=0 and <=100\n",
 		argv[0], argv[i]), exit(1);
-      alarm_level = integer;
+      conf.alarm_level = integer;
       i++;
     } else if (!strcmp(argv[i], "--windowed") || !strcmp(argv[i], "-w")) {
       dockapp_iswindowed = True;
     } else if (!strcmp(argv[i], "--broken-wm") || !strcmp(argv[i], "-bw")) {
       dockapp_isbrokenwm = True;
     } else if (!strcmp(argv[i], "--notify") || !strcmp(argv[i], "-n")) {
-      notif_cmd = argv[i + 1];
+      conf.cmd_notify = argv[i + 1];
       i++;
     } else if (!strcmp(argv[i], "--suspend") || !strcmp(argv[i], "-s")) {
-      suspend_cmd = argv[i + 1];
+      conf.cmd_suspend = argv[i + 1];
       i++;
-    } else if (!strcmp(argv[i], "--standby") || !strcmp(argv[i], "-S")) {
-      standby_cmd = argv[i + 1];
+    } else if (!strcmp(argv[i], "--hibernate") || !strcmp(argv[i], "-H")) {
+      conf.cmd_hibernate = argv[i + 1];
       i++;
     } else {
       fprintf(stderr, "%s: unrecognized option '%s'\n", argv[0], argv[i]);
@@ -423,8 +433,8 @@ static void print_help(char *prog)
 	 "  -w,  --windowed                run the application in windowed mode\n"
 	 "  -bw, --broken-wm               activate broken window manager fix\n"
 	 "  -n,  --notify <string>         command to launch when alarm is on\n"
-	 "  -s,  --suspend <string>        set command for apm suspend\n"
-	 "  -S,  --standby <string>        set command for apm standby\n",
+	 "  -s,  --suspend <string>        set command for suspend\n"
+	 "  -H,  --hibernate <string>        set command for hibernation\n",
 	 prog, prog);
   /* OPTIONS SUPP :
    *  ? -f, --file    : configuration file
