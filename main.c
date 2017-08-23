@@ -49,29 +49,15 @@ const char *argp_program_version = "0.0.1";
 #define SIZE	    58
 #define WINDOWED_BG ". c #AEAAAE"
 
-typedef struct ApmInfos {
-  const char driver_version[10];
-  int        apm_version_major;
-  int        apm_version_minor;
-  int        apm_flags;
-  int        ac_line_status;
-  int        battery_status;
-  int        battery_flags;
-  int        battery_percentage;
-  int        battery_time;
-  int        using_minutes;
-} ApmInfos;
-
-typedef enum { LIGHTOFF, LIGHTON } Light;
-
-
 Pixmap pixmap;
 Pixmap backdrop_on;
 Pixmap backdrop_off;
 Pixmap parts;
 Pixmap mask;
 static unsigned switch_authorized = True;
-static ApmInfos cur_apm_infos;
+Battery bt_current;
+
+typedef enum { LIGHTOFF, LIGHTON } Light;
 
 typedef struct Conf {
   char *display;
@@ -100,10 +86,10 @@ Conf conf = {
 /* prototypes */
 static void update();
 static void switch_light();
-static void draw_timedigit(ApmInfos infos);
-static void draw_pcdigit(ApmInfos infos);
-static void draw_statusdigit(ApmInfos infos);
-static void draw_pcgraph(ApmInfos infos);
+static void draw_timedigit(Battery infos);
+static void draw_pcdigit(Battery infos);
+static void draw_statusdigit(Battery infos);
+static void draw_pcgraph(Battery infos);
 void cl_parse(int, char **);
 void battery_set_current();
 void bt_update();
@@ -125,8 +111,6 @@ int main(int argc, char **argv) {
   sigaction(SIGCHLD, &sa, NULL);
 
   cl_parse(argc, argv);
-
-  /* FIXME: Check for ACPI support */
 
   /* Initialize Application */
   battery_set_current();
@@ -208,7 +192,7 @@ static void update() {
   bt_update();
 
   /* alarm mode */
-  if (cur_apm_infos.battery_percentage < conf.alarm_level) {
+  if (bt_current.capacity < conf.alarm_level) {
     if (!in_alarm_mode) {
       in_alarm_mode = True;
       pre_backlight = conf.backlight;
@@ -231,15 +215,15 @@ static void update() {
 
   /* all clear */
   if (conf.backlight == LIGHTON)
-    dockapp_copyarea(backdrop_on, pixmap, 0, 0, 58, 58, 0, 0);
+    dockapp_copyarea(backdrop_on, pixmap, 0, 0, SIZE, SIZE, 0, 0);
   else
-    dockapp_copyarea(backdrop_off, pixmap, 0, 0, 58, 58, 0, 0);
+    dockapp_copyarea(backdrop_off, pixmap, 0, 0, SIZE, SIZE, 0, 0);
 
   /* draw digit */
-  draw_timedigit(cur_apm_infos);
-  draw_pcdigit(cur_apm_infos);
-  draw_statusdigit(cur_apm_infos);
-  draw_pcgraph(cur_apm_infos);
+  draw_timedigit(bt_current);
+  draw_pcdigit(bt_current);
+  draw_statusdigit(bt_current);
+  draw_pcgraph(bt_current);
 
   /* show */
   dockapp_copy2window(pixmap);
@@ -251,56 +235,45 @@ static void switch_light() {
   switch (conf.backlight) {
   case LIGHTOFF:
     conf.backlight = LIGHTON;
-    dockapp_copyarea(backdrop_on, pixmap, 0, 0, 58, 58, 0, 0);
+    dockapp_copyarea(backdrop_on, pixmap, 0, 0, SIZE, SIZE, 0, 0);
     break;
   case LIGHTON:
     conf.backlight = LIGHTOFF;
-    dockapp_copyarea(backdrop_off, pixmap, 0, 0, 58, 58, 0, 0);
+    dockapp_copyarea(backdrop_off, pixmap, 0, 0, SIZE, SIZE, 0, 0);
     break;
   }
 
   /* redraw digit */
   bt_update();
-  draw_timedigit(cur_apm_infos);
-  draw_pcdigit(cur_apm_infos);
-  draw_statusdigit(cur_apm_infos);
-  draw_pcgraph(cur_apm_infos);
+  draw_timedigit(bt_current);
+  draw_pcdigit(bt_current);
+  draw_statusdigit(bt_current);
+  draw_pcgraph(bt_current);
 
   /* show */
   dockapp_copy2window(pixmap);
 }
 
 
-static void draw_timedigit(ApmInfos infos) {
+static void draw_timedigit(Battery infos) {
   int y = 0;
   int time_left, hour_left, min_left;
 
   if (conf.backlight == LIGHTON) y = 20;
 
-  /*
-    if (
-    (infos.battery_time >= ((infos.using_minutes) ? 1440 : 86400))
-    ) {
-    copyXPMArea(83, 106, 41, 9, 15, 7);
-    } else if (infos.battery_time >= 0) {
-  */
-  time_left = (infos.using_minutes) ? infos.battery_time : infos.battery_time / 60;
+  time_left = infos.seconds_remaining;
   hour_left = time_left / 60;
   min_left  = time_left % 60;
   dockapp_copyarea(parts, pixmap, (hour_left / 10) * 10, y, 10, 20,  5, 7);
   dockapp_copyarea(parts, pixmap, (hour_left % 10) * 10, y, 10, 20, 17, 7);
   dockapp_copyarea(parts, pixmap, (min_left / 10)  * 10, y, 10, 20, 32, 7);
   dockapp_copyarea(parts, pixmap, (min_left % 10)  * 10, y, 10, 20, 44, 7);
-  /*
-    }
-  */
 }
 
-
-static void draw_pcdigit(ApmInfos infos) {
+static void draw_pcdigit(Battery infos) {
   int v100, v10, v1;
   int xd = 0;
-  int num = infos.battery_percentage;
+  int num = infos.capacity;
 
   if (num < 0)  num = 0;
 
@@ -320,8 +293,7 @@ static void draw_pcdigit(ApmInfos infos) {
   }
 }
 
-
-static void draw_statusdigit(ApmInfos infos) {
+static void draw_statusdigit(Battery infos) {
   int xd = 0;
   int y = 31;
 
@@ -330,21 +302,19 @@ static void draw_statusdigit(ApmInfos infos) {
     xd = 50;
   }
 
-  /* draw digit */
-  if (infos.battery_status == 3) /* charging */
+  if (!infos.is_charging)
     dockapp_copyarea(parts, pixmap, 100, y, 4, 9, 41, 45);
 
-  if (infos.ac_line_status == 1)
+  if (infos.is_ac_power)
     dockapp_copyarea(parts, pixmap, 0 + xd, 49, 5, 9, 34, 45);
   else
     dockapp_copyarea(parts, pixmap, 5 + xd, 49, 5, 9, 48, 45);
 }
 
-
-static void draw_pcgraph(ApmInfos infos) {
+static void draw_pcgraph(Battery infos) {
   int xd = 100;
   int nb;
-  int num = infos.battery_percentage / 6.25 ;
+  int num = infos.capacity / 6.25 ;
 
   if (num < 0) num = 0;
 
@@ -413,18 +383,23 @@ cl_parse(int argc, char **argv) {
 }
 
 void bt_update() {
-  fprintf(stderr, "bt_update()\n");
+  printf("bt_update()\n");
 
   Battery bt;
   if (!battery_get(conf.battery, &bt))
     errx(1, "failed to get data for battery #%d", conf.battery);
 
-  cur_apm_infos.ac_line_status = bt.is_ac_power;
-  cur_apm_infos.battery_status = bt.is_charging;
-  cur_apm_infos.battery_percentage = bt.capacity;
-  cur_apm_infos.battery_time = bt.seconds_remaining;
+  bt_current.is_ac_power = bt.is_ac_power;
+  bt_current.is_charging = bt.is_charging;
+  bt_current.capacity = bt.capacity;
+  bt_current.seconds_remaining = bt.seconds_remaining;
 
-  cur_apm_infos.using_minutes = 0;
+  printf("id = %d\n", bt.id);
+  printf("ac power = %d\n", bt.is_ac_power);
+  printf("charging = %d\n", bt.is_charging);
+  printf("cap = %d\n", bt.capacity);
+  printf("sec rem = %d\n", bt.seconds_remaining);
+  printf("\n", bt.seconds_remaining);
 }
 
 void battery_set_current() {
