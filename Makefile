@@ -15,7 +15,7 @@ compile:
 out := _build.$(build.target)$(DEBUG)
 
 obj := $(patsubst %.c, $(out)/%.o, $(wildcard *.c))
-$(obj): dockapp.h
+$(obj): $(wildcard *.h)
 $(out)/main.o: $(wildcard *.xpm)
 
 $(out)/%.o: %.c

@@ -27,13 +27,15 @@
 #define VERSION "0.3.4"
 
 #include <unistd.h>
+#include <stdlib.h>
+#include <string.h>
 #include <signal.h>
+#include <sys/stat.h>
 #include "dockapp.h"
 #include "backlight_on.xpm"
 #include "backlight_off.xpm"
 #include "parts.xpm"
-
-#include <sys/stat.h>
+#include "battery.h"
 
 #define FREE(data) {if (data) free (data); data = NULL;}
 
@@ -96,7 +98,6 @@ static void draw_pcgraph(ApmInfos infos);
 static void parse_arguments(int argc, char **argv);
 static void print_help(char *prog);
 static void apm_getinfos(ApmInfos *infos);
-static int  apm_exists();
 static int  my_system (char *cmd);
 int apm_read(ApmInfos *i);
 
@@ -119,11 +120,7 @@ int main(int argc, char **argv) {
     /* Parse CommandLine */
     parse_arguments(argc, argv);
 
-    /* Check for APM support */
-    if (!apm_exists()) {
-        fprintf(stderr, "No APM support in kernel\n");
-        exit(1);
-    }
+    /* FIXME: Check for ACPI support */
 
     /* Initialize Application */
     apm_getinfos(&cur_apm_infos);
@@ -443,20 +440,11 @@ static void print_help(char *prog)
 
 
 static void apm_getinfos(ApmInfos *infos) {
-    if (apm_read(infos)) {
+    if (!apm_read(infos)) {
         fprintf(stderr, "Cannot read APM information\n");
         exit(1);
     }
 }
-
-
-int apm_exists() {
-    if (access(APMDEV, R_OK))
-        return 0;
-    else
-        return 1;
-}
-
 
 static int my_system (char *cmd) {
     int           pid;
@@ -483,76 +471,19 @@ static int my_system (char *cmd) {
 
 
 int apm_read(ApmInfos *i) {
-    FILE        *str;
-    char         units[10];
-    char         buffer[100];
-    int          retcode = 0;
+  fprintf(stderr, "apm_read()\n");
 
-    if (!(str = fopen(APMDEV, "r")))
-        return 1;
+  int *bt_list = battery_list();
+  if (!bt_list) return false;
 
-    (void)fgets(buffer, sizeof(buffer) - 1, str);
-    buffer[sizeof(buffer) - 1] = '\0';
-    sscanf(buffer, "%s %d.%d %x %x %x %x %d%% %d %s\n",
-            (char *)i->driver_version,
-            &i->apm_version_major,
-            &i->apm_version_minor,
-            &i->apm_flags,
-            &i->ac_line_status,
-            &i->battery_status,
-            &i->battery_flags,
-            &i->battery_percentage,
-            &i->battery_time,
-            units);
-    i->using_minutes = !strncmp(units, "min", 3) ? 1 : 0;
+  Battery bt;
+  battery_get(1, &bt);
 
-    if (i->driver_version[0] == 'B') {
-        strcpy((char *)i->driver_version, "pre-0.7");
-        i->apm_version_major  = 0;
-        i->apm_version_minor  = 0;
-        i->apm_flags          = 0;
-        i->ac_line_status     = 0xff;
-        i->battery_status     = 0xff;
-        i->battery_flags      = 0xff;
-        i->battery_percentage = -1;
-        i->battery_time       = -1;
-        i->using_minutes      = 1;
+  i->ac_line_status = bt.is_ac_power;
+  i->battery_status = bt.is_charging;
+  i->battery_percentage = bt.capacity;
+  i->battery_time = bt.seconds_remaining;
 
-        sscanf(buffer, "BIOS version: %d.%d", &i->apm_version_major, &i->apm_version_minor);
-        (void)fgets(buffer, sizeof(buffer) - 1, str);
-        sscanf(buffer, "Flags: 0x%02x", &i->apm_flags);
-
-        if (i->apm_flags & APM_32_BIT_SUPPORT) {
-            (void)fgets(buffer, sizeof(buffer) - 1, str);
-            (void)fgets(buffer, sizeof(buffer) - 1, str);
-
-            if (buffer[0] != 'P') {
-
-                if (!strncmp(buffer+4, "off line", 8))     i->ac_line_status = 0;
-                else if (!strncmp(buffer+4, "on line", 7)) i->ac_line_status = 1;
-                else if (!strncmp(buffer+4, "on back", 7)) i->ac_line_status = 2;
-
-                (void)fgets(buffer, sizeof(buffer) - 1, str);
-                if (!strncmp(buffer+16, "high", 4))        i->battery_status = 0;
-                else if (!strncmp(buffer+16, "low", 3))    i->battery_status = 1;
-                else if (!strncmp(buffer+16, "crit", 4))   i->battery_status = 2;
-                else if (!strncmp(buffer+16, "charg", 5))  i->battery_status = 3;
-
-                (void)fgets(buffer, sizeof(buffer) - 1, str);
-                if (strncmp(buffer+14, "unknown", 7))      i->battery_percentage = atoi(buffer + 14);
-
-                if (i->apm_version_major >= 1 && i->apm_version_minor >= 1) {
-                    (void)fgets(buffer, sizeof(buffer) - 1, str);
-                    sscanf(buffer, "Battery flag: 0x%02x", &i->battery_flags);
-                    (void)fgets(buffer, sizeof(buffer) - 1, str);
-                    if (strncmp(buffer+14, "unknown", 7))  i->battery_time = atoi(buffer + 14);
-                }
-            }
-        }
-    }
-
-    if (i->battery_percentage > 100) i->battery_percentage = -1;
-    fclose(str);
-
-    return retcode;
+  i->using_minutes = 0;
+  return true;
 }
