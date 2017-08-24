@@ -32,8 +32,9 @@ bool battery_get(int id, Battery *bt) {
   return r;
 }
 
+static
 long mAh_to_mWh(long voltage, long val) {
-  return (voltage * val) / (1000 * 1000);
+  return (voltage/1000.0) * (val/1000.0);
 }
 
 typedef struct Uevent {
