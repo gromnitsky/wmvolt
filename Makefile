@@ -14,16 +14,27 @@ compile:
 
 out := _build.$(build.target)$(DEBUG)
 
+mkdir = @mkdir -p $(dir $@)
+
+
 obj := $(patsubst %.c, $(out)/%.o, $(wildcard *.c))
 $(out)/main.o: $(wildcard *.xpm) $(wildcard *.h)
 $(out)/battery.o: battery.h
 $(out)/dockapp.o: dockapp.h
 
 $(out)/%.o: %.c
-	@mkdir -p $(dir $@)
+	$(mkdir)
 	$(COMPILE.c) $< -o $@
 
 $(out)/wmvolt: $(obj)
 	$(LINK.c) $^ -o $@
 
 compile: $(out)/wmvolt
+
+
+
+$(out)/test/battery: test/battery.c $(out)/battery.o
+	$(mkdir)
+	$(CC) $(CFLAGS) $(TARGET_ARCH) $^ -o $@
+
+compile: $(out)/test/battery
