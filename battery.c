@@ -36,71 +36,113 @@ long mAh_to_mWh(long voltage, long val) {
   return (voltage * val) / (1000 * 1000);
 }
 
-bool battery_get_from_file(char *file, Battery *bt) {
+typedef struct Uevent {
+  bool is_charging;
+  long power;
+  int capacity;
+  long energy_now;
+  long energy_full;
+  long energy_full_design;
+  long voltage;
+  bool is_mWh;
+} Uevent;
+
+void uevent_init(Uevent *ue) {
+  ue->is_charging = false;
+  ue->power = -1;
+  ue->capacity = -1;
+  ue->energy_now = -1;
+  ue->energy_full = -1;
+  ue->energy_full_design = -1;
+  ue->voltage = -1;
+  ue->is_mWh = true;
+}
+
+static
+bool parse_entry(char *file, Uevent *uevent) {
   FILE *fp = fopen(file, "r");
   if (!fp) return false;
 
-  battery_init(bt);
-  bt->is_ac_power = ac_power() == 1;
-
   char *line = NULL;
   size_t line_size = 0;
-  long voltage = -1, power = -1, energy = -1, energy_full = -1;
-  bool watt_as_unit = true;
   while (getline(&line, &line_size, fp) != -1) {
     char key[BUFSIZ], val[BUFSIZ];
     sscanf(line, "%[^=]=%s", key, val);
     //printf("'%s' = '%s'\n", key, val);
 
     if (strcmp("POWER_SUPPLY_STATUS", key) == 0
-	&& strcasecmp("charging", val) == 0) bt->is_charging = true;
-    if (strcmp("POWER_SUPPLY_POWER_NOW", key) == 0) power = atoi(val);
-    if (strcmp("POWER_SUPPLY_CAPACITY", key) == 0) bt->capacity = atoi(val);
-    if (strcmp("POWER_SUPPLY_ENERGY_NOW", key) == 0) {
-      watt_as_unit = true;
-      energy = atoi(val);
-    }
-    if (strcmp("POWER_SUPPLY_ENERGY_FULL", key) == 0) energy_full = atoi(val);
+	&& strcasecmp("charging", val) == 0) uevent->is_charging = true;
+    if (strcmp("POWER_SUPPLY_CAPACITY", key) == 0) uevent->capacity = atoi(val);
+    if (strcmp("POWER_SUPPLY_VOLTAGE_NOW", key) == 0)
+      uevent->voltage = atoi(val);
 
-    // mAh case
-    if (strcmp("POWER_SUPPLY_VOLTAGE_NOW", key) == 0) voltage = atoi(val);
-    if (strcmp("POWER_SUPPLY_CHARGE_NOW", key) == 0) {
-      watt_as_unit = false;
-      energy = atoi(val);
+    if (strcmp("POWER_SUPPLY_POWER_NOW", key) == 0
+	|| strcmp("POWER_SUPPLY_CURRENT_NOW", key) == 0)
+      uevent->power = abs(atoi(val));
+    if (strcmp("POWER_SUPPLY_ENERGY_FULL", key) == 0
+	|| strcmp("POWER_SUPPLY_CHARGE_FULL", key) == 0)
+      uevent->energy_full = atoi(val);
+    if (strcmp("POWER_SUPPLY_ENERGY_FULL_DESIGN", key) == 0
+	|| strcmp("POWER_SUPPLY_CHARGE_FULL_DESIGN", key) == 0)
+      uevent->energy_full = atoi(val);
+
+    if (strcmp("POWER_SUPPLY_ENERGY_NOW", key) == 0) {
+      uevent->is_mWh = true;
+      uevent->energy_now = atoi(val);
     }
-    if (strcmp("POWER_SUPPLY_CHARGE_FULL", key) == 0) energy_full = atoi(val);
-    if (strcmp("POWER_SUPPLY_CURRENT_NOW", key) == 0) power = atoi(val);
+    if (strcmp("POWER_SUPPLY_CHARGE_NOW", key) == 0) {
+      uevent->is_mWh = false;
+      uevent->energy_now = atoi(val);
+    }
 
     key[0] = '\0';
     val[0] = '\0';
   }
   free(line);
+  fclose(fp);
+  return true;
+}
+
+bool battery_get_from_file(char *file, Battery *bt) {
+  Uevent uevent;
+  uevent_init(&uevent);
+  if (!parse_entry(file, &uevent)) return false;
+
+  battery_init(bt);
+  bt->is_ac_power = ac_power() == 1;
+  bt->is_charging = uevent.is_charging;
+  bt->capacity = uevent.capacity;
+
+  if (uevent.energy_now > uevent.energy_full)
+    uevent.energy_now = uevent.energy_full;
+  if (uevent.energy_full == -1) uevent.energy_full = uevent.energy_full_design;
 
   // ENERGY_* attrs represents capacity in mWh;
   // CHARGE_* attrs represents capacity in mAh;
-  if (!watt_as_unit && voltage != -1) {
+  if (!uevent.is_mWh && uevent.voltage != -1) {
     // actually this is not necessary
-    power = mAh_to_mWh(voltage, power);
-    energy = mAh_to_mWh(voltage, energy);
-    energy_full = mAh_to_mWh(voltage, energy_full);
+    uevent.power = mAh_to_mWh(uevent.voltage, uevent.power);
+    uevent.energy_now = mAh_to_mWh(uevent.voltage, uevent.energy_now);
+    uevent.energy_full = mAh_to_mWh(uevent.voltage, uevent.energy_full);
   }
 
-  if (power > 0 && energy > 0 && energy_full > 0) {
+  if (uevent.power > 0 && uevent.energy_now > 0 && uevent.energy_full > 0
+      && bt->capacity <= 100) {
     double hours;
     if (bt->is_charging) {
-      hours = (energy_full - energy) / (double)power;
+      hours = (uevent.energy_full - uevent.energy_now) / (double)uevent.power;
     } else {
-      hours = (double)energy / power;
+      hours = (double)uevent.energy_now / uevent.power;
     }
     bt->seconds_remaining = (int)(hours * 60*60);
   } else
     bt->seconds_remaining = 0;
 
-  if (bt->capacity < 0 && energy > 0 && energy_full > 0) {
-    bt->capacity = ((double)energy/energy_full)*100;
+  if (uevent.energy_now > 0 && uevent.energy_full > 0) {
+    int percent = ((double)uevent.energy_now/uevent.energy_full)*100;
+    if (bt->capacity < 0 || bt->capacity >= 100) bt->capacity = percent;
   }
-
-  fclose(fp);
+  if (bt->capacity > 100) bt->capacity = 100;
   return true;
 }
 
