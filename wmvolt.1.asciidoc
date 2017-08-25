@@ -46,7 +46,7 @@ MOUSE BUTTONS
 OPTIONS
 -------
 
-*-W*:: Activate _The Broken Window Manage_ fix. Required for FVWM.
+*-W*:: Activate _The Broken Window Manager_ fix. Required for FVWM.
 
 *-l* #rgb:: A back-light color.
 
