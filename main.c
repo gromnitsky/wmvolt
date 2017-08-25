@@ -326,10 +326,13 @@ parse_opt(int key, char *arg, struct argp_state *state) {
   case 'b': args->backlight = LIGHTON; break;
   case 'l': args->light_color = arg; break;
   case 'u':
-    args->update_interval = atoi(arg); /* FIXME: > 0 */
+    args->update_interval = atoi(arg);
+    if (args->update_interval < 1) errx(1, "-u should be > 1");
     break;
   case 'a':
-    args->alarm_level = atoi (arg); /* FIXME range: 1-99 */
+    args->alarm_level = atoi(arg);
+    if (args->alarm_level < 1 || args->alarm_level > 99)
+      errx(1, "-a valid range: [1-99]");
     break;
   case 'w': dockapp_iswindowed = True; break;
   case 'W': dockapp_isbrokenwm = True; break;
