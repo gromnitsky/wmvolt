@@ -60,7 +60,7 @@ typedef enum { LIGHTOFF, LIGHTON } Light;
 
 typedef struct Conf {
   char *display;
-  Light backlight;		// color
+  Light backlight;
   char *light_color;		// #rgb
   int update_interval;		// sec
   int alarm_level;		// %
@@ -68,18 +68,20 @@ typedef struct Conf {
   char *cmd_suspend;
   char *cmd_hibernate;
   int battery;
+  int verbose;
 } Conf;
 
 Conf conf = {
   .display = "",
   .backlight = LIGHTOFF,
   .light_color = NULL,
-  .update_interval = 5,
+  .update_interval = 1,
   .alarm_level = 20,
   .cmd_notify = NULL,
   .cmd_suspend = "echo systemctl suspend",
   .cmd_hibernate = "echo systemctl hibernate",
-  .battery = -1
+  .battery = -1,
+  .verbose = 0
 };
 
 /* prototypes */
@@ -130,18 +132,12 @@ int main(int argc, char **argv) {
   if (dockapp_iswindowed)
     backlight_on_xpm[1] = backlight_off_xpm[1] = WINDOWED_BG;
 
-  if (!dockapp_xpm2pixmap(backlight_on_xpm, &backdrop_on, &mask, colors, ncolor)) {
-    fprintf(stderr, "Error initializing backlit background image.\n");
-    exit(1);
-  }
-  if (!dockapp_xpm2pixmap(backlight_off_xpm, &backdrop_off, NULL, NULL, 0)) {
-    fprintf(stderr, "Error initializing background image.\n");
-    exit(1);
-  }
-  if (!dockapp_xpm2pixmap(parts_xpm, &parts, NULL, colors, ncolor)) {
-    fprintf(stderr, "Error initializing parts image.\n");
-    exit(1);
-  }
+  if (!dockapp_xpm2pixmap(backlight_on_xpm, &backdrop_on, &mask, colors, ncolor))
+    err(1, "error initializing backlit bg image");
+  if (!dockapp_xpm2pixmap(backlight_off_xpm, &backdrop_off, NULL, NULL, 0))
+    err(1, "error initializing bg image");
+  if (!dockapp_xpm2pixmap(parts_xpm, &parts, NULL, colors, ncolor))
+    err(1, "error initializing parts image");
 
   /* shape window */
   if (!dockapp_iswindowed) dockapp_setshape(mask, 0, 0);
@@ -357,6 +353,7 @@ parse_opt(int key, char *arg, struct argp_state *state) {
     errx(1, "no batteries detected");
     break;
   case 'B': args->battery = atoi(arg); break;
+  case 'v': args->verbose++; break;
   default:
     return ARGP_ERR_UNKNOWN;
   }
@@ -378,6 +375,7 @@ cl_parse(int argc, char **argv) {
     {"cmd-hibernate",   'H', "str",  0, "A command to hibernate the machine " },
     {"print-batteries", 'p', 0,      0, "Print all the available batteries" },
     {"battery",         'B', "num",  0, "Explicitly select the battery" },
+    {"verbose",         'v', 0,      0, "Increase the verbosity level" },
     { 0 }
   };
   struct argp argp = { options, parse_opt, NULL, NULL };
@@ -385,8 +383,20 @@ cl_parse(int argc, char **argv) {
 }
 
 static
+char *iso8601() {
+  char *buf = malloc(21);
+  time_t now = time(NULL);
+  strftime(buf, 21, "%FT%TZ", gmtime(&now));
+  return buf;
+}
+
+static
 void bt_update(Battery *bt_current) {
-  printf("bt_update()\n");
+  if (conf.verbose) {
+    char *ts = iso8601();
+    fprintf(stderr, "%s: bt_update(): ", ts);
+    free(ts);
+  }
 
   Battery bt;
   if (!battery_get(conf.battery, &bt))
@@ -397,12 +407,11 @@ void bt_update(Battery *bt_current) {
   bt_current->capacity = bt.capacity;
   bt_current->seconds_remaining = bt.seconds_remaining;
 
-  printf("id = %d\n", bt.id);
-  printf("ac power = %d\n", bt.is_ac_power);
-  printf("charging = %d\n", bt.is_charging);
-  printf("cap = %d\n", bt.capacity);
-  printf("sec rem = %d\n", bt.seconds_remaining);
-  printf("\n");
+  if (conf.verbose) {
+    fprintf(stderr, "id=%d, ac=%d, charging=%d, %%=%d, sec=%d\n",
+	    bt.id, bt.is_ac_power, bt.is_charging, bt.capacity,
+	    bt.seconds_remaining);
+  }
 }
 
 static
