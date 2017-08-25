@@ -41,12 +41,9 @@ compile: $(out)/test/battery
 
 
 
-doc.man := $(patsubst %.asciidoc, $(out)/%, $(wildcard *.asciidoc))
-doc.html := $(patsubst %.asciidoc, $(out)/%.html, $(wildcard *.asciidoc))
-
 $(out)/%.1.html $(out)/%.1: %.1.asciidoc
 	$(mkdir)
 	a2x --doctype manpage -f manpage $< -D $(dir $@)
 	a2x --doctype manpage -f xhtml $< -D $(dir $@)
 
-compile: $(doc.man) $(doc.html)
+compile: $(out)/wmvolt.1 $(out)/wmvolt.1.html
