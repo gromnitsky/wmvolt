@@ -65,8 +65,6 @@ typedef struct Conf {
   int update_interval;		// sec
   int alarm_level;		// %
   char *cmd_notify;
-  char *cmd_suspend;
-  char *cmd_hibernate;
   int battery;
   int verbose;
   char *debug_uevent;		// a file name
@@ -79,8 +77,6 @@ Conf conf = {
   .update_interval = 1,
   .alarm_level = 20,
   .cmd_notify = NULL,
-  .cmd_suspend = "echo systemctl suspend",
-  .cmd_hibernate = "echo systemctl hibernate",
   .battery = -1,
   .verbose = 0
 };
@@ -164,11 +160,7 @@ int main(int argc, char **argv) {
       case ButtonPress:
 	switch (event.xbutton.button) {
 	case 1: switch_light(&bt_current); break;
-	case 2:
-	  system(event.xbutton.state == ControlMask ? conf.cmd_hibernate: conf.cmd_suspend);
-	  break;
 	case 3: switch_authorized = !switch_authorized; break;
-	default: break;
 	}
 	break;
       default: break;
@@ -337,8 +329,6 @@ parse_opt(int key, char *arg, struct argp_state *state) {
   case 'w': dockapp_iswindowed = True; break;
   case 'W': dockapp_isbrokenwm = True; break;
   case 'n': args->cmd_notify = arg; break;
-  case 'S': args->cmd_suspend = arg; break;
-  case 'H': args->cmd_hibernate = arg; break;
   case 'p':
     bt_list = battery_list();
     if (bt_list) {
