@@ -4,7 +4,7 @@ An eye-candy dockapp to monitor Linux ACPI battery status.
 
 ![](http://ultraimg.com/images/2017/08/25/YIY6.png)
 
-(The numbers above above don't represent real battery values.)
+(The numbers above don't represent real battery values.)
 
 * Linux only
 * Uses a "new" `/sys/class/power_supply/*` interface)

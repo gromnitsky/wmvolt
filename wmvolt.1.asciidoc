@@ -59,8 +59,8 @@ the default).
 
 *-p*:: Print all the available batteries.
 
-*-n* string:: A command that is passed to *system*(3) when the user
-presses a middle mouse button. (None by default.)
+*-n* string:: A command that is passed to *system*(3) when the alarm
+goes off. (None by default.)
 
 For other options run the app w/ `--help`.
 
