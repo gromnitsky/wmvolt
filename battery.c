@@ -151,7 +151,7 @@ int *battery_list() {
   int *list = NULL;
   glob_t gbuf;
 
-  if (glob("/sys/class/power_supply/BAT*", GLOB_NOSORT, NULL, &gbuf) != 0)
+  if (glob("/sys/class/power_supply/BAT*", 0, NULL, &gbuf) != 0)
     return NULL;
 
   size_t size = gbuf.gl_pathc;
