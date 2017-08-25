@@ -69,6 +69,7 @@ typedef struct Conf {
   char *cmd_hibernate;
   int battery;
   int verbose;
+  char *debug_uevent;		// a file name
 } Conf;
 
 Conf conf = {
@@ -346,6 +347,7 @@ parse_opt(int key, char *arg, struct argp_state *state) {
     break;
   case 'B': args->battery = atoi(arg); break;
   case 'v': args->verbose++; break;
+  case 300: args->debug_uevent = arg; break;
   default:
     return ARGP_ERR_UNKNOWN;
   }
@@ -368,6 +370,7 @@ cl_parse(int argc, char **argv) {
     {"print-batteries", 'p', 0,      0, "Print all the available batteries" },
     {"battery",         'B', "num",  0, "Explicitly select the battery" },
     {"verbose",         'v', 0,      0, "Increase the verbosity level" },
+    {"debug-uevent",    300, "file", 0, "Use the fake uevent data" },
     { 0 }
   };
   struct argp argp = { options, parse_opt, NULL, NULL };
@@ -391,8 +394,8 @@ void bt_update(Battery *bt_current) {
   }
 
   Battery bt;
-  if (!battery_get(conf.battery, &bt))
-    errx(1, "failed to get data for battery #%d", conf.battery);
+  bool r = conf.debug_uevent ? battery_get_from_file(conf.debug_uevent, &bt) : battery_get(conf.battery, &bt);
+  if (!r) err(1, "failed to get data for battery #%d", conf.battery);
 
   bt_current->is_ac_power = bt.is_ac_power;
   bt_current->is_charging = bt.is_charging;
@@ -413,4 +416,5 @@ void battery_set_current() {
   int *bt_list = battery_list();
   if (!bt_list) errx(1, "no batteries detected");
   conf.battery = bt_list[0];
+  free(bt_list);
 }
