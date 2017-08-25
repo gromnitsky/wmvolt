@@ -183,8 +183,19 @@ int main(int argc, char **argv) {
 
 
 
+static
+void draw_all_the_digits(Battery bt) {
+  draw_timedigit(bt);
+  draw_pcdigit(bt);
+  draw_statusdigit(bt);
+  draw_pcgraph(bt);
+
+  dockapp_copy2window(pixmap); // show
+}
+
 /* called by timer */
-static void gui_update(Battery *bt_current) {
+static
+void gui_update(Battery *bt_current) {
   static Light pre_backlight;
   static Bool in_alarm_mode = False;
 
@@ -197,8 +208,8 @@ static void gui_update(Battery *bt_current) {
       pre_backlight = conf.backlight;
       system(conf.cmd_notify);
     }
-    if ( (switch_authorized) ||
-	 ( (! switch_authorized) && (conf.backlight != pre_backlight) ) ) {
+    if (switch_authorized ||
+	(!switch_authorized && conf.backlight != pre_backlight)) {
       switch_light(bt_current);
       return;
     }
@@ -218,41 +229,22 @@ static void gui_update(Battery *bt_current) {
   else
     dockapp_copyarea(backdrop_off, pixmap, 0, 0, SIZE, SIZE, 0, 0);
 
-  /* draw digit */
-  draw_timedigit(*bt_current);
-  draw_pcdigit(*bt_current);
-  draw_statusdigit(*bt_current);
-  draw_pcgraph(*bt_current);
-
-  /* show */
-  dockapp_copy2window(pixmap);
+  draw_all_the_digits(*bt_current);
 }
-
 
 /* called when mouse button pressed */
-static void switch_light(Battery *bt_current) {
-  switch (conf.backlight) {
-  case LIGHTOFF:
+static
+void switch_light(Battery *bt_current) {
+  if (conf.backlight == LIGHTOFF) {
     conf.backlight = LIGHTON;
     dockapp_copyarea(backdrop_on, pixmap, 0, 0, SIZE, SIZE, 0, 0);
-    break;
-  case LIGHTON:
+  } else {
     conf.backlight = LIGHTOFF;
     dockapp_copyarea(backdrop_off, pixmap, 0, 0, SIZE, SIZE, 0, 0);
-    break;
   }
 
-  /* redraw digit */
-  bt_update(bt_current);
-  draw_timedigit(*bt_current);
-  draw_pcdigit(*bt_current);
-  draw_statusdigit(*bt_current);
-  draw_pcgraph(*bt_current);
-
-  /* show */
-  dockapp_copy2window(pixmap);
+  draw_all_the_digits(*bt_current);
 }
-
 
 static void draw_timedigit(Battery infos) {
   int y = 0;
