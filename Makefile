@@ -47,3 +47,13 @@ $(out)/%.1.html $(out)/%.1: %.1.asciidoc
 	a2x --doctype manpage -f xhtml $< -D $(dir $@)
 
 compile: $(out)/wmvolt.1 $(out)/wmvolt.1.html
+
+
+
+DESTDIR :=
+prefix := $(DESTDIR)/usr
+
+install: compile
+	install -D $(out)/wmvolt -t $(prefix)/bin
+	install -D -m644 $(out)/wmvolt.1 -t $(prefix)/share/man/man1
+	install -D -m644 $(out)/*.{html,css} -t $(prefix)/share/doc/wmvolt
