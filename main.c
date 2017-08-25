@@ -55,7 +55,6 @@ Pixmap backdrop_off;
 Pixmap parts;
 Pixmap mask;
 static unsigned switch_authorized = True;
-Battery bt_current;
 
 typedef enum { LIGHTOFF, LIGHTON } Light;
 
@@ -84,16 +83,17 @@ Conf conf = {
 };
 
 /* prototypes */
-static void update();
-static void switch_light();
-static void draw_timedigit(Battery infos);
-static void draw_pcdigit(Battery infos);
-static void draw_statusdigit(Battery infos);
-static void draw_pcgraph(Battery infos);
-void cl_parse(int, char **);
-void battery_set_current();
-void bt_update();
+static void gui_update(Battery*);
+static void switch_light(Battery*);
+static void draw_timedigit(Battery);
+static void draw_pcdigit(Battery);
+static void draw_statusdigit(Battery);
+static void draw_pcgraph(Battery);
+static void cl_parse(int, char **);
+static void battery_set_current();
+static void bt_update(Battery*);
 
+
 
 int main(int argc, char **argv) {
   XEvent   event;
@@ -114,7 +114,9 @@ int main(int argc, char **argv) {
 
   /* Initialize Application */
   battery_set_current();
-  bt_update();
+  Battery bt_current;
+  bt_update(&bt_current);
+
   dockapp_open_window(conf.display, PACKAGE, SIZE, SIZE, argc, argv);
   dockapp_set_eventmask(ButtonPressMask);
 
@@ -164,7 +166,7 @@ int main(int argc, char **argv) {
       switch (event.type) {
       case ButtonPress:
 	switch (event.xbutton.button) {
-	case 1: switch_light(); break;
+	case 1: switch_light(&bt_current); break;
 	case 2:
 	  system(event.xbutton.state == ControlMask ? conf.cmd_hibernate: conf.cmd_suspend);
 	  break;
@@ -176,23 +178,24 @@ int main(int argc, char **argv) {
       }
     } else {
       /* Time Out */
-      update();
+      gui_update(&bt_current);
     }
   }
 
   return 0;
 }
 
+
 
 /* called by timer */
-static void update() {
+static void gui_update(Battery *bt_current) {
   static Light pre_backlight;
   static Bool in_alarm_mode = False;
 
-  bt_update();
+  bt_update(bt_current);
 
   /* alarm mode */
-  if (bt_current.capacity < conf.alarm_level) {
+  if (bt_current->capacity < conf.alarm_level) {
     if (!in_alarm_mode) {
       in_alarm_mode = True;
       pre_backlight = conf.backlight;
@@ -200,14 +203,14 @@ static void update() {
     }
     if ( (switch_authorized) ||
 	 ( (! switch_authorized) && (conf.backlight != pre_backlight) ) ) {
-      switch_light();
+      switch_light(bt_current);
       return;
     }
   } else {
     if (in_alarm_mode) {
       in_alarm_mode = False;
       if (conf.backlight != pre_backlight) {
-	switch_light();
+	switch_light(bt_current);
 	return;
       }
     }
@@ -220,10 +223,10 @@ static void update() {
     dockapp_copyarea(backdrop_off, pixmap, 0, 0, SIZE, SIZE, 0, 0);
 
   /* draw digit */
-  draw_timedigit(bt_current);
-  draw_pcdigit(bt_current);
-  draw_statusdigit(bt_current);
-  draw_pcgraph(bt_current);
+  draw_timedigit(*bt_current);
+  draw_pcdigit(*bt_current);
+  draw_statusdigit(*bt_current);
+  draw_pcgraph(*bt_current);
 
   /* show */
   dockapp_copy2window(pixmap);
@@ -231,7 +234,7 @@ static void update() {
 
 
 /* called when mouse button pressed */
-static void switch_light() {
+static void switch_light(Battery *bt_current) {
   switch (conf.backlight) {
   case LIGHTOFF:
     conf.backlight = LIGHTON;
@@ -244,11 +247,11 @@ static void switch_light() {
   }
 
   /* redraw digit */
-  bt_update();
-  draw_timedigit(bt_current);
-  draw_pcdigit(bt_current);
-  draw_statusdigit(bt_current);
-  draw_pcgraph(bt_current);
+  bt_update(bt_current);
+  draw_timedigit(*bt_current);
+  draw_pcdigit(*bt_current);
+  draw_statusdigit(*bt_current);
+  draw_pcgraph(*bt_current);
 
   /* show */
   dockapp_copy2window(pixmap);
@@ -324,7 +327,7 @@ static void draw_pcgraph(Battery infos) {
     dockapp_copyarea(parts, pixmap, xd, 0, 2, 9, 6 + nb * 3, 33);
 }
 
-error_t
+static error_t
 parse_opt(int key, char *arg, struct argp_state *state) {
   Conf *args = state->input;
   int *bt_list;
@@ -360,7 +363,7 @@ parse_opt(int key, char *arg, struct argp_state *state) {
   return 0;
 }
 
-void
+static void
 cl_parse(int argc, char **argv) {
   struct argp_option options[] = {
     {"backlight",       'b', 0,      0, "Turn on the back-light" },
@@ -381,17 +384,18 @@ cl_parse(int argc, char **argv) {
   argp_parse(&argp, argc, argv, 0, 0, &conf);
 }
 
-void bt_update() {
+static
+void bt_update(Battery *bt_current) {
   printf("bt_update()\n");
 
   Battery bt;
   if (!battery_get(conf.battery, &bt))
     errx(1, "failed to get data for battery #%d", conf.battery);
 
-  bt_current.is_ac_power = bt.is_ac_power;
-  bt_current.is_charging = bt.is_charging;
-  bt_current.capacity = bt.capacity;
-  bt_current.seconds_remaining = bt.seconds_remaining;
+  bt_current->is_ac_power = bt.is_ac_power;
+  bt_current->is_charging = bt.is_charging;
+  bt_current->capacity = bt.capacity;
+  bt_current->seconds_remaining = bt.seconds_remaining;
 
   printf("id = %d\n", bt.id);
   printf("ac power = %d\n", bt.is_ac_power);
@@ -401,6 +405,7 @@ void bt_update() {
   printf("\n");
 }
 
+static
 void battery_set_current() {
   if (conf.battery != -1) return;
 
