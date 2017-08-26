@@ -192,7 +192,7 @@ void draw_all_the_digits(Battery bt) {
 
 static int
 my_system (char *cmd) {
-  if (!cmd) return;
+  if (!cmd) return -1;
   int pid;
   extern char **environ;
 
