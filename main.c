@@ -219,8 +219,11 @@ static void
 alert(char *template, Battery bt) {
   if (!template) return;
 
+  char percent[3];
+  snprintf(percent, sizeof(percent), "%d", bt.capacity); // itoa
+
   char *cmd;
-  asprintf(&cmd, template, bt.capacity);
+  asprintf(&cmd, template, percent);
   my_system(cmd);
   free(cmd);
 }
