@@ -32,6 +32,7 @@
 const char *argp_program_version = "0.0.1";
 
 #define _XOPEN_SOURCE
+#define _GNU_SOURCE
 
 #include <unistd.h>
 #include <stdlib.h>
@@ -68,6 +69,7 @@ typedef struct Conf {
   int battery;
   int verbose;
   char *debug_uevent;		// a file name
+  int debug_ac_power;
 } Conf;
 
 Conf conf = {
@@ -78,7 +80,9 @@ Conf conf = {
   .alarm_level = 20,
   .cmd_notify = NULL,
   .battery = -1,
-  .verbose = 0
+  .verbose = 0,
+  .debug_uevent = NULL,
+  .debug_ac_power = -1
 };
 
 /* prototypes */
@@ -186,6 +190,41 @@ void draw_all_the_digits(Battery bt) {
   dockapp_copy2window(pixmap); // show
 }
 
+static int
+my_system (char *cmd) {
+  if (!cmd) return;
+  int pid;
+  extern char **environ;
+
+  if (cmd == 0) return 1;
+  pid = fork();
+  if (pid == -1) return -1;
+  if (pid == 0) {
+    pid = fork();
+    if (pid == 0) {
+      char *argv[4];
+      argv[0] = "sh";
+      argv[1] = "-c";
+      argv[2] = cmd;
+      argv[3] = 0;
+      execve("/bin/sh", argv, environ);
+      exit(0);
+    }
+    exit(0);
+  }
+  return 0;
+}
+
+static void
+alert(char *template, Battery bt) {
+  if (!template) return;
+
+  char *cmd;
+  asprintf(&cmd, template, bt.capacity);
+  my_system(cmd);
+  free(cmd);
+}
+
 /* called by timer */
 static
 void gui_update(Battery *bt_current) {
@@ -195,11 +234,11 @@ void gui_update(Battery *bt_current) {
   bt_update(bt_current);
 
   /* alarm mode */
-  if (bt_current->capacity < conf.alarm_level) {
+  if (bt_current->capacity < conf.alarm_level && !bt_current->is_ac_power) {
     if (!in_alarm_mode) {
       in_alarm_mode = True;
       pre_backlight = conf.backlight;
-      system(conf.cmd_notify);
+      alert(conf.cmd_notify, *bt_current);
     }
     if (switch_authorized ||
 	(!switch_authorized && conf.backlight != pre_backlight)) {
@@ -341,6 +380,7 @@ parse_opt(int key, char *arg, struct argp_state *state) {
   case 'B': args->battery = atoi(arg); break;
   case 'v': args->verbose++; break;
   case 300: args->debug_uevent = arg; break;
+  case 301: args->debug_ac_power = atoi(arg); break;
   default:
     return ARGP_ERR_UNKNOWN;
   }
@@ -358,12 +398,12 @@ cl_parse(int argc, char **argv) {
     {"windowed",        'w', 0,      0, "Run the app in the windowed mode" },
     {"broken-wm",       'W', 0,      0, "Activate the broken WM fix" },
     {"cmd-notify",      'n', "str",  0, "A command to launch when the alarm is on" },
-    {"cmd-suspend",     'S', "str",  0, "A command to supend the machine" },
-    {"cmd-hibernate",   'H', "str",  0, "A command to hibernate the machine " },
     {"print-batteries", 'p', 0,      0, "Print all the available batteries" },
     {"battery",         'B', "num",  0, "Explicitly select the battery" },
+    // debug
     {"verbose",         'v', 0,      0, "Increase the verbosity level" },
     {"debug-uevent",    300, "file", 0, "Use the fake uevent data" },
+    {"debug-ac",        301, "num",  0, "Use the fake ac power data" },
     { 0 }
   };
   struct argp argp = { options, parse_opt, NULL, NULL };
@@ -390,7 +430,7 @@ void bt_update(Battery *bt_current) {
   bool r = conf.debug_uevent ? battery_get_from_file(conf.debug_uevent, &bt) : battery_get(conf.battery, &bt);
   if (!r) err(1, "failed to get data for battery #%d", conf.battery);
 
-  bt_current->is_ac_power = bt.is_ac_power;
+  bt_current->is_ac_power = conf.debug_ac_power != -1 ? conf.debug_ac_power : bt.is_ac_power;
   bt_current->is_charging = bt.is_charging;
   bt_current->capacity = bt.capacity;
   bt_current->seconds_remaining = bt.seconds_remaining;

@@ -14,9 +14,8 @@ DESCRIPTION
 -----------
 
 wmvolt is a program to monitor ACPI battery status (using a "new"
-`/sys/class/power_supply/*` interface). It's a dockapp that is
-supported by X Window managers viz. Window Maker, AfterStep,
-Enlightenment & FVWM.
+`/sys/class/power_supply/*` interface). It's a dockapp for Window
+Managers like Window Maker or FVWM.
 
 The remaining time is displayed in the top half of the app. In the
 middle, there is a battery load (%) that is shown as a number & as a
@@ -33,12 +32,6 @@ MOUSE BUTTONS
 
 `Left (1)`::
    Toggle the back-light
-
-`Middle (2)`::
-   Suspend the system
-
-`Ctrl + Middle (2)`::
-   Hibernate the system
 
 `Right (3)`::
    Stop/start the alarm indicator.
@@ -59,15 +52,12 @@ the default).
 
 *-p*:: Print all the available batteries.
 
-*-n* string:: A command that is passed to *system*(3) when the alarm
-goes off. (None by default.)
+*-n* string:: A command that runs when the alarm goes off. (None by
+default.) You can use `%d` that will be replaced by the current
+battery load. For example: `wmvolt -Wb -n 'xmessage "Your battery is
+running low (%d%%)!"'`.
 
 For other options run the app w/ `--help`.
-
-HISTORY
--------
-
-TODO.
 
 AUTHORS
 -------

@@ -6,18 +6,18 @@ An eye-candy dockapp to monitor Linux ACPI battery status.
 
 (The numbers above don't represent real battery values.)
 
-* Linux only
-* Uses a "new" `/sys/class/power_supply/*` interface)
-* Multiple batteries support
-* User-selectable back-light color
-* FVWM support
+* Uses a "new" `/sys/class/power_supply/*` interface).
+* Multiple batteries support.
+* User-selectable back-light color.
+* Alert hook.
+* FVWM support.
 
 ## Installation
 
-You'll need libXpm-devel, libXext-deve & asciidoc.
+You'll need libXpm-devel, libXext-devel & asciidoc.
 
 ~~~
-make install
+$ make install
 ~~~
 
 ## Credits
