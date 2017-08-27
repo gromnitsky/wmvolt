@@ -16,7 +16,6 @@ out := _build.$(build.target)$(DEBUG)
 
 mkdir = @mkdir -p $(dir $@)
 
-
 obj := $(patsubst %.c, $(out)/%.o, $(wildcard *.c))
 $(out)/main.o: $(wildcard *.xpm) $(wildcard *.h)
 $(out)/battery.o: battery.h
@@ -56,4 +55,3 @@ prefix := $(DESTDIR)/usr
 install: compile
 	install -D $(out)/wmvolt -t $(prefix)/bin
 	install -D -m644 $(out)/wmvolt.1 -t $(prefix)/share/man/man1
-	install -D -m644 $(out)/*.{html,css} -t $(prefix)/share/doc/wmvolt
