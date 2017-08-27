@@ -10,7 +10,7 @@ An eye-candy dockapp to monitor Linux ACPI battery status.
 * Multiple batteries support.
 * User-selectable back-light color.
 * Alert hook.
-* FVWM support.
+* FVWM support (via FvwmButtons or as a standalone app).
 
 ## Installation
 
@@ -20,6 +20,8 @@ You'll need libXpm-devel, libXext-devel & asciidoc.
 $ make install
 ~~~
 
+(The rpm spec is [here](https://github.com/gromnitsky/rpm).)
+
 ## Credits
 
 Big thanks to Thomas Nemeth
@@ -28,4 +30,4 @@ which wmvolt borrows the GUI code.
 
 ## License
 
-GPL2+.
+GPLv2+.
