@@ -14,7 +14,7 @@ An eye-candy dockapp to monitor Linux ACPI battery status.
 
 ## Installation
 
-You'll need libXpm-devel, libXext-devel & asciidoc.
+You'll need pkg-config, libXpm-devel, libXext-devel & asciidoc.
 
 ~~~
 $ make install
