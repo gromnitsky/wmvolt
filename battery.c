@@ -26,7 +26,7 @@ int ac_power() {
 
 bool battery_get(int id, Battery *bt) {
   char file[BUFSIZ];
-  sprintf(file, "/sys/class/power_supply/BAT%d/uevent", id);
+  snprintf(file, BUFSIZ, "/sys/class/power_supply/BAT%d/uevent", id);
   bool r = battery_get_from_file(file, bt);
   bt->id = id;
   return r;
