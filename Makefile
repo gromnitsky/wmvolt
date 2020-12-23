@@ -10,7 +10,7 @@ ifndef build.target
 build.target := $(shell uname -m)
 endif
 
-compile:
+compile: tags
 
 out := _build.$(build.target)$(DEBUG)
 
@@ -46,6 +46,9 @@ $(out)/%.1.html $(out)/%.1: %.1.asciidoc
 	a2x --doctype manpage -f xhtml $< -D $(dir $@)
 
 compile: $(out)/wmvolt.1 $(out)/wmvolt.1.html
+
+tags:
+	etags *.[ch]
 
 
 
