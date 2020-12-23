@@ -10,7 +10,7 @@ ifndef build.target
 build.target := $(shell uname -m)
 endif
 
-compile: tags
+compile:
 
 out := _build.$(build.target)$(DEBUG)
 
@@ -47,8 +47,7 @@ $(out)/%.1.html $(out)/%.1: %.1.asciidoc
 
 compile: $(out)/wmvolt.1 $(out)/wmvolt.1.html
 
-tags:
-	etags *.[ch]
+TAGS: $(wildcard *.[ch]); etags $^
 
 
 
