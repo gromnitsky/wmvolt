@@ -2,15 +2,13 @@
 
 An eye-candy dockapp to monitor Linux ACPI battery status.
 
-![](http://ultraimg.com/images/2017/08/25/YIY6.png)
-
-(The numbers above don't represent real battery values.)
+![](README.screenshot1.png)
 
 * Uses a "new" `/sys/class/power_supply/*` interface).
 * Multiple batteries support.
-* User-selectable back-light color.
-* Alert hook.
-* FVWM support (via FvwmButtons or as a standalone app).
+* Custom backlight colors.
+* An alert hook.
+* FVWM3 support (via FvwmButtons or as a standalone app).
 
 ## Installation
 
@@ -21,6 +19,13 @@ $ make install
 ~~~
 
 (The rpm spec is [here](https://github.com/gromnitsky/rpm).)
+
+## News
+
+* 0.0.2
+
+    - Add -L option for a different backlight color when ac power is off.
+    - Fix the ac power indicator.
 
 ## Credits
 

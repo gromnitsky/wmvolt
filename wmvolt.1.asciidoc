@@ -18,14 +18,14 @@ wmvolt is a program to monitor ACPI battery status (using a "new"
 Managers like Window Maker or FVWM.
 
 If the battery status is below some critical point (20% by default),
-an alarm goes off via constantly toggling the back-light on/off. The
+an alarm goes off via constantly toggling the backlight on/off. The
 app can launch any external program when the battery level is too low.
 
 MOUSE BUTTONS
 -------------
 
 `Left (1)`::
-   Toggle the back-light
+   Toggle the backlight
 
 `Right (3)`::
    Stop/start the alarm indicator.
@@ -35,12 +35,14 @@ OPTIONS
 
 *-W*:: Activate _The Broken Window Manager_ fix. Required for FVWM.
 
-*-l* #rgb:: A back-light color.
+*-l* #rgb:: A default backlight color.
+
+*-L* #rgb:: A backlight color when AC is off.
 
 *-a* digit:: At which threshold is to raise the alert, [1-99]. (20 is
 the default).
 
-*-b*:: Turn on the back-light.
+*-b*:: Turn on the backlight.
 
 *-B* digit:: Explicitly select the battery.
 
@@ -51,7 +53,16 @@ default.) You can use `%s` that will be replaced by the current
 battery load. For example: `wmvolt -Wb -n 'xmessage "Your battery is
 running low (%s%%)!"'`.
 
-For other options run the app w/ `--help`.
+For other less useful options, run the app w/ `--help`.
+
+EXAMPLES
+--------
+
+Set 2 variants of a backlight:
+
+----
+$ wmvolt -Wb -L '#ff0000' -l '#48d1cc'
+----
 
 AUTHORS
 -------
