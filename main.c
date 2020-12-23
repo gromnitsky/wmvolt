@@ -63,6 +63,7 @@ typedef struct Conf {
   char *display;
   Light backlight;
   char *light_color;		// #rgb
+  char *light_color_bat;	// #rgb
   int update_interval;		// sec
   int alarm_level;		// %
   char *cmd_notify;
@@ -75,7 +76,8 @@ typedef struct Conf {
 Conf conf = {
   .display = "",
   .backlight = LIGHTOFF,
-  .light_color = NULL,
+  .light_color = "#6ec63b",
+  .light_color_bat = NULL,
   .update_interval = 1,
   .alarm_level = 20,
   .cmd_notify = NULL,
@@ -86,7 +88,7 @@ Conf conf = {
 };
 
 /* prototypes */
-static void gui_update(Battery*);
+static bool gui_update(Battery*, bool);
 static void switch_light(Battery*);
 static void draw_timedigit(Battery);
 static void draw_pcdigit(Battery);
@@ -95,13 +97,12 @@ static void draw_pcgraph(Battery);
 static void cl_parse(int, char **);
 static void battery_set_current();
 static void bt_update(Battery*);
+static void backlight_setup(Battery*);
 
 
 
 int main(int argc, char **argv) {
   XEvent   event;
-  XpmColorSymbol colors[2] = { {"Back0", NULL, 0}, {"Back1", NULL, 0} };
-  int      ncolor = 0;
   struct   sigaction sa;
 
   sa.sa_handler = SIG_IGN;
@@ -123,27 +124,16 @@ int main(int argc, char **argv) {
   dockapp_open_window(conf.display, PACKAGE, SIZE, SIZE, argc, argv);
   dockapp_set_eventmask(ButtonPressMask);
 
-  if (conf.light_color) {
-    colors[0].pixel = dockapp_getcolor(conf.light_color);
-    colors[1].pixel = dockapp_blendedcolor(conf.light_color, -24, -24, -24, 1.0);
-    ncolor = 2;
-  }
-
   /* change raw xpm data to pixmap */
   if (dockapp_iswindowed)
     backlight_on_xpm[1] = backlight_off_xpm[1] = WINDOWED_BG;
 
-  if (!dockapp_xpm2pixmap(backlight_on_xpm, &backdrop_on, &mask, colors, ncolor))
-    err(1, "error initializing backlit bg image");
+  backlight_setup(&bt_current);
   if (!dockapp_xpm2pixmap(backlight_off_xpm, &backdrop_off, NULL, NULL, 0))
     err(1, "error initializing bg image");
-  if (!dockapp_xpm2pixmap(parts_xpm, &parts, NULL, colors, ncolor))
-    err(1, "error initializing parts image");
 
   /* shape window */
   if (!dockapp_iswindowed) dockapp_setshape(mask, 0, 0);
-  if (mask) XFreePixmap(display, mask);
-
   /* pixmap : draw area */
   pixmap = dockapp_XCreatePixmap(SIZE, SIZE);
 
@@ -157,6 +147,7 @@ int main(int argc, char **argv) {
   dockapp_show();
 
   /* Main loop */
+  bool prev_on_ac = false;
   while (1) {
     if (dockapp_nextevent_or_timeout(&event, conf.update_interval * 1000)) {
       /* Next Event */
@@ -171,7 +162,7 @@ int main(int argc, char **argv) {
       }
     } else {
       /* Time Out */
-      gui_update(&bt_current);
+      prev_on_ac = gui_update(&bt_current, prev_on_ac);
     }
   }
 
@@ -179,6 +170,27 @@ int main(int argc, char **argv) {
 }
 
 
+
+static
+void backlight_setup(Battery *infos) {
+  char *color = conf.light_color;
+  if (!infos->is_ac_power && conf.light_color_bat)
+    color = conf.light_color_bat;
+
+  XpmColorSymbol colors[2] = { {"Back0", NULL, 0}, {"Back1", NULL, 0} };
+  colors[0].pixel = dockapp_getcolor(color);
+  colors[1].pixel = dockapp_blendedcolor(color, -24, -24, -24, 1.0);
+  int ncolor = 2;
+
+  // free previous pixmap values
+  if (backdrop_on) XFreePixmap(display, backdrop_on);
+  if (mask) XFreePixmap(display, mask);
+
+  if (!dockapp_xpm2pixmap(backlight_on_xpm, &backdrop_on, &mask, colors, ncolor))
+    err(1, "error initializing backlit bg image");
+  if (!dockapp_xpm2pixmap(parts_xpm, &parts, NULL, colors, ncolor))
+    err(1, "error initializing parts image");
+}
 
 static
 void draw_all_the_digits(Battery bt) {
@@ -230,11 +242,17 @@ alert(char *template, Battery bt) {
 
 /* called by timer */
 static
-void gui_update(Battery *bt_current) {
+bool gui_update(Battery *bt_current, bool prev_on_ac) {
   static Light pre_backlight;
   static Bool in_alarm_mode = False;
 
   bt_update(bt_current);
+
+  if (prev_on_ac) {
+    if (!bt_current->is_ac_power) backlight_setup(bt_current);
+  } else {                      /* was on battery */
+    if (bt_current->is_ac_power) backlight_setup(bt_current);
+  }
 
   /* alarm mode */
   if (bt_current->capacity < conf.alarm_level && !bt_current->is_ac_power) {
@@ -246,14 +264,14 @@ void gui_update(Battery *bt_current) {
     if (switch_authorized ||
 	(!switch_authorized && conf.backlight != pre_backlight)) {
       switch_light(bt_current);
-      return;
+      return bt_current->is_ac_power;
     }
   } else {
     if (in_alarm_mode) {
       in_alarm_mode = False;
       if (conf.backlight != pre_backlight) {
 	switch_light(bt_current);
-	return;
+	return bt_current->is_ac_power;
       }
     }
   }
@@ -265,6 +283,8 @@ void gui_update(Battery *bt_current) {
     dockapp_copyarea(backdrop_off, pixmap, 0, 0, SIZE, SIZE, 0, 0);
 
   draw_all_the_digits(*bt_current);
+
+  return bt_current->is_ac_power;
 }
 
 /* called when mouse button pressed */
@@ -359,6 +379,7 @@ parse_opt(int key, char *arg, struct argp_state *state) {
   case 'd': args->display = arg; break;
   case 'b': args->backlight = LIGHTON; break;
   case 'l': args->light_color = arg; break;
+  case 'L': args->light_color_bat = arg; break;
   case 'u':
     args->update_interval = atoi(arg);
     if (args->update_interval < 1) errx(1, "-u should be > 1");
@@ -393,9 +414,10 @@ parse_opt(int key, char *arg, struct argp_state *state) {
 static void
 cl_parse(int argc, char **argv) {
   struct argp_option options[] = {
-    {"backlight",       'b', 0,      0, "Turn on the back-light" },
+    {"backlight",       'b', 0,      0, "Turn on the backlight" },
     {"display",         'd', "str",  0, "X11 display to use" },
-    {"light-color",     'l', "#rgb", 0, "A back-light color" },
+    {"light-color",     'l', "#rgb", 0, "A default backlight color" },
+    {"light-color-bat", 'L', "#rgb", 0, "A backlight color when AC is off" },
     {"update-interval", 'u', "num",  0, "Seconds between the updates" },
     {"alarm-level",     'a', "%",    0, "A low battery level that raises the alarm" },
     {"windowed",        'w', 0,      0, "Run the app in the windowed mode" },
@@ -405,8 +427,8 @@ cl_parse(int argc, char **argv) {
     {"battery",         'B', "num",  0, "Explicitly select the battery" },
     // debug
     {"verbose",         'v', 0,      0, "Increase the verbosity level" },
-    {"debug-uevent",    300, "file", 0, "Use the fake uevent data" },
-    {"debug-ac",        301, "num",  0, "Use the fake ac power data" },
+    {"debug-uevent",    300, "file", 0, "Use fake uevent data" },
+    {"debug-ac",        301, "num",  0, "Use fake ac power data" },
     { 0 }
   };
   struct argp argp = { options, parse_opt, NULL, NULL };
