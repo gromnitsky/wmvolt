@@ -13,15 +13,35 @@ void battery_init(Battery *bt) {
   bt->seconds_remaining = -1;
 }
 
+// search through all the ac adapters & return 1 if at least one of
+// them is online; this is probably wrong if every battery has a
+// special dedicated adapter incapable of charging other batteries,
+// but I don't have such hardware
 static
 int ac_power() {
-  FILE *fp = fopen("/sys/class/power_supply/ACAD/online", "r");
-  if (!fp) return -1;
-  int ch = getc(fp);
-  fclose(fp);
+  int result = 0;
 
-  if (ch == EOF) return -1;
-  return ch == '1' ? 1 : 0;
+  glob_t gbuf;
+  if (glob("/sys/class/power_supply/AC*", 0, NULL, &gbuf) != 0)
+    result = -1; // no ac adapters!
+
+  for (size_t i = 0; i < gbuf.gl_pathc /* 0 if glob returned not 0 */; ++i) {
+    char *indicator = "/online";
+    int path_size = strlen(gbuf.gl_pathv[i]) + strlen(indicator) + 1;
+    char path[path_size];
+    snprintf(path, path_size, "%s%s", gbuf.gl_pathv[i], indicator);
+
+    FILE *fp = fopen(path, "r"); if (!fp) continue;
+    int ch = getc(fp);
+    fclose(fp);
+    if (ch == '1') {
+      result = 1;
+      break;
+    }
+  }
+
+  globfree(&gbuf);
+  return result;
 }
 
 bool battery_get(int id, Battery *bt) {
