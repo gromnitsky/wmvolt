@@ -225,10 +225,12 @@ dockapp_xpm2pixmap(char **data, Pixmap *pixmap, Pixmap *mask,
 	xpmAttr.valuemask |= XpmColorSymbols;
     }
 
+    Bool r = True;
     if (XpmCreatePixmapFromData(display, icon_window, data, pixmap, mask, &xpmAttr) != 0)
-	return False;
+	r = False;
 
-    return True;
+    XpmFreeAttributes(&xpmAttr);
+    return r;
 }
 
 
