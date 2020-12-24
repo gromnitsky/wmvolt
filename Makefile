@@ -47,7 +47,7 @@ $(out)/%.1.html $(out)/%.1: %.1.asciidoc
 
 compile: $(out)/wmvolt.1 $(out)/wmvolt.1.html
 
-TAGS: $(wildcard *.[ch]); etags $^
+TAGS: $(wildcard *.[ch] *.xpm); etags --map-C=+.xpm $^
 
 
 
