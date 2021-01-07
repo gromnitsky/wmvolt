@@ -29,7 +29,7 @@
 */
 
 #define PACKAGE "wmvolt"
-const char *argp_program_version = "0.0.1";
+const char *argp_program_version = "0.0.2";
 
 #define _XOPEN_SOURCE
 #define _GNU_SOURCE
