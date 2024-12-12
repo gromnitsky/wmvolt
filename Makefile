@@ -26,7 +26,7 @@ $(out)/%.o: %.c
 	$(COMPILE.c) $< -o $@
 
 $(out)/wmvolt: $(obj)
-	$(LINK.c) $^ -o $@
+	$(CC) $^ $(LDFLAGS) -o $@
 
 compile: $(out)/wmvolt
 
